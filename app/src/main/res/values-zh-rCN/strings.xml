@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">PocketSSH</string>
+    <string name="app_tagline">本地节点 / 安全访问</string>
+    <string name="ssh_version_label">SSH // 2.12</string>
+    <string name="node_status_label">节点状态</string>
+    <string name="access_config_label">连接配置</string>
+    <string name="username_hint">用户名</string>
+    <string name="password_hint">密码</string>
+    <string name="port_hint">端口</string>
+    <string name="state_starting">启动中</string>
+    <string name="state_online">在线</string>
+    <string name="state_offline">离线</string>
+    <string name="state_error">错误</string>
+    <string name="endpoint_unavailable">不可用</string>
+    <string name="button_start_service">启动服务</string>
+    <string name="button_stop_service">停止服务</string>
+    <string name="button_save_apply">保存并应用</string>
+    <string name="error_username_required">请输入用户名</string>
+    <string name="error_password_required">请输入密码</string>
+    <string name="error_port_range">端口范围为 1 到 65535</string>
+    <string name="ssh_notification_channel">SSH 服务</string>
+    <string name="ssh_notification_title">PocketSSH 本地 SSH 服务</string>
+    <string name="ssh_notification_text">SSH 服务正在运行</string>
+</resources>

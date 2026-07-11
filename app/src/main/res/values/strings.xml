@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">PocketSSH</string>
+    <string name="app_tagline">Local Node / Secure Access</string>
+    <string name="ssh_version_label">SSH // 2.12</string>
+    <string name="node_status_label">Node Status</string>
+    <string name="access_config_label">Access Configuration</string>
+    <string name="username_hint">Username</string>
+    <string name="password_hint">Password</string>
+    <string name="port_hint">Port</string>
+    <string name="state_starting">STARTING</string>
+    <string name="state_online">ONLINE</string>
+    <string name="state_offline">OFFLINE</string>
+    <string name="state_error">ERROR</string>
+    <string name="endpoint_unavailable">UNAVAILABLE</string>
+    <string name="button_start_service">START SERVICE</string>
+    <string name="button_stop_service">STOP SERVICE</string>
+    <string name="button_save_apply">SAVE AND APPLY</string>
+    <string name="error_username_required">Username is required</string>
+    <string name="error_password_required">Password is required</string>
+    <string name="error_port_range">Port must be 1 to 65535</string>
+    <string name="ssh_notification_channel">SSH Server</string>
+    <string name="ssh_notification_title">PocketSSH Local SSH Service</string>
+    <string name="ssh_notification_text">SSH service is running</string>
+</resources>

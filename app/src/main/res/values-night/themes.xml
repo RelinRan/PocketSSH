@@ -1,0 +1,12 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.PocketSSH" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/ssh_accent</item>
+        <item name="colorPrimaryVariant">@color/ssh_surface</item>
+        <item name="colorOnPrimary">@color/black</item>
+        <item name="colorSecondary">@color/ssh_accent</item>
+        <item name="colorOnSecondary">@color/black</item>
+        <item name="android:colorAccent">@color/ssh_accent</item>
+        <item name="android:statusBarColor">@color/ssh_background</item>
+        <item name="android:navigationBarColor">@color/ssh_background</item>
+    </style>
+</resources>
