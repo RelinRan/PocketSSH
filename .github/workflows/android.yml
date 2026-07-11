@@ -30,7 +30,53 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Run unit tests
-        run: .\gradlew.bat --no-daemon --stacktrace :app:testDebugUnitTest
+        shell: pwsh
+        run: |
+          .\gradlew.bat --no-daemon --stacktrace :app:testDebugUnitTest 2>&1 | Tee-Object -FilePath gradle-test-output.log
+          exit $LASTEXITCODE
+
+      - name: Summarize unit test failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+
+          $summaryLines = @("# Unit test failure summary", "")
+          if (Test-Path gradle-test-output.log) {
+            $tail = (Get-Content gradle-test-output.log -Tail 160) -join "`n"
+            $message = ($tail -replace "`r?`n", "%0A")
+            Write-Output "::error title=Gradle unit test failure::$message"
+            $summaryLines += "## Gradle output tail"
+            $summaryLines += '```text'
+            $summaryLines += $tail
+            $summaryLines += '```'
+          }
+
+          $xmlFiles = Get-ChildItem app/build/test-results/testDebugUnitTest -Filter "TEST-*.xml" -ErrorAction SilentlyContinue
+          foreach ($file in $xmlFiles) {
+            [xml]$xml = Get-Content $file.FullName
+            foreach ($case in $xml.testsuite.testcase) {
+              if ($case.failure -or $case.error) {
+                $problem = if ($case.failure) { $case.failure } else { $case.error }
+                $className = $case.classname
+                $testName = $case.name
+                $details = (($problem.message, $problem.'#text') -join "`n").Trim()
+                $details = ($details -replace "`r?`n", "%0A")
+                Write-Output "::error file=$($file.FullName),title=$className.$testName::$details"
+                $summaryLines += ""
+                $summaryLines += "## $className.$testName"
+                $summaryLines += '```text'
+                $summaryLines += (($problem.message, $problem.'#text') -join "`n").Trim()
+                $summaryLines += '```'
+              }
+            }
+          }
+
+          if ($summaryLines.Count -le 2) {
+            $summaryLines += "No JUnit XML failure entries were found. The failure likely happened before tests executed."
+          }
+
+          $summaryLines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
 
       - name: Upload unit test reports
         if: failure()
