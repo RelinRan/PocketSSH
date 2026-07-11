@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Check out repository
@@ -29,28 +29,25 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x gradlew
-
       - name: Run unit tests
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
+        run: .\gradlew.bat --no-daemon :app:testDebugUnitTest
 
       - name: Build installable APK
-        run: ./gradlew --no-daemon :app:assembleDebug
+        run: .\gradlew.bat --no-daemon :app:assembleDebug
 
       - name: Locate APK
         id: apk
-        shell: bash
+        shell: pwsh
         run: |
-          APK_PATH="$(find app/build/outputs/apk/debug -maxdepth 1 -name 'PocketSSH-v*.apk' -print -quit)"
-          test -n "$APK_PATH"
-          APK_NAME="$(basename "$APK_PATH")"
-          if [[ "$GITHUB_REF_TYPE" == "tag" && "$APK_NAME" != "PocketSSH-${GITHUB_REF_NAME}.apk" ]]; then
-            echo "Tag $GITHUB_REF_NAME does not match generated APK $APK_NAME" >&2
-            exit 1
+          $apk = Get-ChildItem app/build/outputs/apk/debug/PocketSSH-v*.apk | Select-Object -First 1
+          if (-not $apk) {
+            throw "Generated PocketSSH APK was not found"
           fi
-          echo "path=$APK_PATH" >> "$GITHUB_OUTPUT"
-          echo "name=$APK_NAME" >> "$GITHUB_OUTPUT"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $apk.Name -ne "PocketSSH-$($env:GITHUB_REF_NAME).apk") {
+            throw "Tag $($env:GITHUB_REF_NAME) does not match generated APK $($apk.Name)"
+          }
+          "path=$($apk.FullName)" >> $env:GITHUB_OUTPUT
+          "name=$($apk.Name)" >> $env:GITHUB_OUTPUT
 
       - name: Upload CI artifact
         uses: actions/upload-artifact@v4
