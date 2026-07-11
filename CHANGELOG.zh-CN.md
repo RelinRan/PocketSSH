@@ -1,5 +1,10 @@
 # 更新日志
 
+## v1.0.0003
+
+- 改进 Android 13 远程 Shell 命令兼容性。
+- 增强 GitHub Actions 单元测试失败诊断，包含堆栈、注解和测试报告 artifact。
+
 ## v1.0.0002
 
 - 修复 Android 设备因不支持 `Path.of` 导致 SFTP 启动后断开的问题。

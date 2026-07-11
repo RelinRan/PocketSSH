@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.0003
+
+- Improved Android 13 command compatibility for remote shell operations.
+- Added GitHub Actions diagnostics for unit test failures, including stack traces, annotations, and uploaded test reports.
+
 ## v1.0.0002
 
 - Fixed SFTP startup failure on Android devices caused by the unsupported `Path.of` API.
