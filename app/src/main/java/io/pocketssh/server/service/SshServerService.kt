@@ -15,6 +15,8 @@ import io.pocketssh.server.ssh.AndroidCommandResolvers
 import io.pocketssh.server.ssh.SshServerManager
 import java.io.File
 
+internal fun notificationSmallIcon(): Int = R.drawable.ic_notification_ssh
+
 class SshServerService : Service() {
     private var manager: SshServerManager? = null
 
@@ -23,7 +25,7 @@ class SshServerService : Service() {
         val notifications = getSystemService(NotificationManager::class.java)
         notifications.createNotificationChannel(NotificationChannel(CHANNEL_ID, getString(R.string.ssh_notification_channel), NotificationManager.IMPORTANCE_LOW))
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(notificationSmallIcon())
             .setContentTitle(getString(R.string.ssh_notification_title))
             .setContentText(getString(R.string.ssh_notification_text))
             .setPriority(NotificationCompat.PRIORITY_LOW)
