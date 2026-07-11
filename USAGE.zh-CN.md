@@ -122,13 +122,18 @@ scp -O -P 2222 ./local.txt android@192.168.15.109:/sdcard/Download/local.txt
 ## 7. 权限和限制
 
 - PocketSSH 不是系统 root shell，默认以应用自身权限运行。
+- 设备未取得 Root 权限时，需要系统特权的命令可能返回 `Permission denied`、只能获取部分信息或无法执行。系统 `/data` 等受保护目录也只有在 Android 系统、SELinux 策略和设备权限允许时才能访问。
 - Android 设备的文件访问、应用列表、进程信息和系统命令受系统版本与权限限制。
 - 涉及网络配置、系统时间、安装卸载、重启等高权限操作时，设备可能需要 root 或系统级授权。
 - 无权限时命令应返回明确错误，不应导致 SSH 服务崩溃。
 - Android 11 及以上系统中，PSSH 打开系统设置页时请开启“所有文件访问权限”，返回应用后服务会自动重启。
 - 即使已授予共享存储权限，Android 仍可能单独限制 `Android/data`、`Android/obb` 和系统 `/data`。
 
-## 8. 安全建议
+## 8. 测试设备范围
+
+PocketSSH 当前主要在基于 Rockchip 芯片的 Android 开发板上进行 SSH 远程维护和文件操作测试。不同芯片平台、Android 版本、SELinux 策略和厂商 ROM 的行为可能不同，正式部署前请在实际目标设备上逐项验证所需指令。
+
+## 9. 安全建议
 
 - 修改默认账号和密码。
 - 不要在公网暴露 SSH 端口。

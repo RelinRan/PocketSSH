@@ -10,6 +10,7 @@ import org.apache.sshd.server.shell.ShellFactory
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -1110,10 +1111,16 @@ class AndroidInteractiveShellFactory(
         }
 
         private fun queryIp() {
-            val result = executeForText(listOf(shellPath, "-c", "ip addr"))
-                ?: executeForText(listOf(shellPath, "-c", "ifconfig"))
-                ?: executeForText(listOf(shellPath, "-c", "getprop dhcp.wlan0.ipaddress"))
-            if (result == null) {
+            val result = listOf(
+                "/system/bin/ip -o addr",
+                "/system/bin/ip addr",
+                "/system/bin/ifconfig",
+                "ip addr",
+                "ifconfig",
+            ).firstNotNullOfOrNull { command ->
+                executeForText(listOf(shellPath, "-c", command))?.takeIf(String::isNotBlank)
+            } ?: networkInterfaceFallback().takeIf(String::isNotBlank)
+            if (result.isNullOrBlank()) {
                 write("ip query failed\r\n")
                 return
             }
@@ -1365,9 +1372,11 @@ class AndroidInteractiveShellFactory(
 
         private fun collectCpuInfo(): Pair<List<List<String>>, List<List<String>>> {
             if (!shellPath.startsWith("/")) return emptyList<List<String>>() to emptyList()
-            val before = executeForText(listOf(shellPath, "-c", "cat /proc/stat")) ?: return emptyList<List<String>>() to emptyList()
+            val before = readProcStat()
+                ?: return basicCpuInfo() to emptyList()
             Thread.sleep(CPU_SAMPLE_MILLIS)
-            val after = executeForText(listOf(shellPath, "-c", "cat /proc/stat")) ?: return emptyList<List<String>>() to emptyList()
+            val after = readProcStat()
+                ?: return basicCpuInfo() to emptyList()
             val usage = calculateCpuUsage(before, after)
             val cpuDirs = File("/sys/devices/system/cpu").listFiles { file -> file.name.matches(Regex("cpu\\d+")) }
                 ?.sortedBy { it.name.removePrefix("cpu").toIntOrNull() ?: Int.MAX_VALUE }
@@ -1405,6 +1414,18 @@ class AndroidInteractiveShellFactory(
             return summary to cores
         }
 
+        private fun basicCpuInfo(): List<List<String>> {
+            val processors = File("/proc/cpuinfo").readTextOrNull()
+                ?.lineSequence()?.count { it.startsWith("processor") }
+                ?.takeIf { it > 0 }
+            return listOf(
+                listOf("model", System.getProperty("os.arch").orEmpty().ifBlank { "unknown" }),
+                listOf("architecture", System.getProperty("os.arch").orEmpty().ifBlank { "unknown" }),
+                listOf("cores", (processors ?: Runtime.getRuntime().availableProcessors()).toString()),
+                listOf("usage", "unavailable on this Android device"),
+            )
+        }
+
         private fun queryCpuFrequencyPolicies(): Map<Int, File> {
             val root = File("/sys/devices/system/cpu/cpufreq")
             val policies = root.listFiles { file -> file.isDirectory && file.name.matches(Regex("policy\\d+")) }.orEmpty()
@@ -1435,6 +1456,12 @@ class AndroidInteractiveShellFactory(
         private fun formatCpuPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
 
         private fun File.readTextOrNull(): String? = runCatching { readText() }.getOrNull()
+
+        private fun readProcStat(): String? = runCatching {
+            FileInputStream("/proc/stat").use { input ->
+                input.readBytes().toString(StandardCharsets.UTF_8)
+            }.takeIf { it.lineSequence().any { line -> line.startsWith("cpu ") } }
+        }.getOrNull()
 
         private fun listApps(packageName: String?) {
             if (!packageName.isNullOrBlank()) {
@@ -2775,21 +2802,13 @@ class AndroidInteractiveShellFactory(
         }
 
         private fun queryGpuInfo() {
-            val rows = collectGpuInfo()
-            if (rows.isEmpty()) {
-                write("GPU query failed\r\n")
-                return
-            }
+            val rows = collectGpuInfo().ifEmpty { unavailableAcceleratorRows("GPU") }
             writeTableTitle("GPU")
             writeLinuxKeyValueRows(formatAcceleratorRows(rows))
         }
 
         private fun queryNpuInfo() {
-            val rows = collectNpuInfo()
-            if (rows.isEmpty()) {
-                write("NPU query failed\r\n")
-                return
-            }
+            val rows = collectNpuInfo().ifEmpty { unavailableAcceleratorRows("NPU/APU") }
             writeTableTitle("NPU")
             writeLinuxKeyValueRows(formatAcceleratorRows(rows))
         }
@@ -2797,21 +2816,22 @@ class AndroidInteractiveShellFactory(
         private fun collectGpuInfo(): List<List<String>> {
             if (!shellPath.startsWith("/")) return emptyList()
             val rows = mutableListOf<List<String>>()
+            if (File("/sys/class/misc/mali0").exists()) {
+                rows += listOf("type", "Mali GPU")
+                rows += listOf("vendor", "ARM")
+                rows += listOf("path", "/sys/class/misc/mali0")
+                return withAcceleratorUsage(rows.distinctBy { it.firstOrNull() })
+            }
             val props = getProperties()
             props["ro.hardware.egl"]?.takeIf(String::isNotBlank)?.let { rows += listOf("egl", it) }
             props["ro.opengles.version"]?.takeIf(String::isNotBlank)?.let { rows += listOf("opengles_version", it) }
-            val renderer = executeForText(listOf(shellPath, "-c", "dumpsys SurfaceFlinger"), timeoutSeconds = 5)
-                ?.lineSequence()
-                ?.map(String::trim)
-                ?.firstOrNull { line -> line.contains("GLES", ignoreCase = true) }
-            renderer?.let { rows += listOf("renderer", it) }
             val usageScript = """
                 for p in /sys/devices/platform/fb000000.gpu/utilisation /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage; do
                   if [ -r "${'$'}p" ]; then value="${'$'}(cat "${'$'}p" 2>/dev/null | tr '\n' ' ')"; [ -n "${'$'}value" ] && echo "utilisation=${'$'}value"; break; fi
                 done
             """.trimIndent()
             rows += collectAcceleratorSysfsRows(
-                directoryPatterns = "/sys/class/devfreq/*gpu* /sys/devices/platform/*gpu*/devfreq/*",
+                directoryPatterns = "/sys/class/devfreq/*gpu* /sys/devices/platform/*gpu*/devfreq/* /sys/devices/platform/gpufreq /sys/class/misc/mali0/device/devfreq/*",
                 extraScript = usageScript,
             )
             return withAcceleratorUsage(rows.distinctBy { it.firstOrNull() })
@@ -2833,10 +2853,21 @@ class AndroidInteractiveShellFactory(
                   if [ -r "${'$'}p" ]; then value="${'$'}(cat "${'$'}p" 2>/dev/null | tr '\n' ' ')"; [ -n "${'$'}value" ] && echo "debug_freq=${'$'}value"; break; fi
                 done
             """.trimIndent()
-            return withAcceleratorUsage(collectAcceleratorSysfsRows(
-                directoryPatterns = "/sys/class/devfreq/*npu* /sys/devices/platform/*npu*/devfreq/*",
+            val rows = collectAcceleratorSysfsRows(
+                directoryPatterns = "/sys/class/devfreq/*npu* /sys/devices/platform/*npu*/devfreq/* /sys/devices/platform/*apu*/devfreq/* /sys/devices/platform/*mdla*/devfreq/*",
                 extraScript = extra,
-            ).distinctBy { it.firstOrNull() })
+            ).distinctBy { it.firstOrNull() }
+            if (rows.isNotEmpty()) return withAcceleratorUsage(rows)
+            val mediatekNode = listOf(
+                "/sys/devices/platform/apusys",
+                "/sys/devices/platform/19034000.mdla",
+                "/sys/devices/platform/apu_debug.0",
+            ).firstOrNull { File(it).exists() }
+            return if (mediatekNode != null) {
+                unavailableAcceleratorRows("NPU/APU", "MediaTek") + listOf(listOf("path", mediatekNode))
+            } else {
+                emptyList()
+            }
         }
 
         private fun collectAcceleratorSysfsRows(
@@ -2865,9 +2896,15 @@ class AndroidInteractiveShellFactory(
         }
 
         private fun executeRootFirstText(command: String, timeoutSeconds: Long): String? {
-            val candidates = rootShellCommands(command).take(2) + listOf(listOf(shellPath, "-c", command))
-            candidates.forEach { candidate ->
-                executeForText(candidate, timeoutSeconds)?.takeIf(String::isNotBlank)?.let { return it }
+            executeForText(listOf(shellPath, "-c", command), timeoutSeconds)
+                ?.takeIf(String::isNotBlank)?.let { return it }
+            val rootCandidates = if (File("/system/bin/su").canExecute() || File("/system/xbin/su").canExecute()) {
+                rootShellCommands(command).take(2)
+            } else {
+                emptyList()
+            }
+            rootCandidates.forEach { candidate ->
+                executeForText(candidate, 1)?.takeIf(String::isNotBlank)?.let { return it }
             }
             return null
         }

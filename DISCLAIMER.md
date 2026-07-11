@@ -10,6 +10,8 @@ This project is provided as is, without any express or implied warranties, inclu
 
 The project author does not guarantee that this project will work correctly on all Android versions, device vendors, system permissions, network environments, or business scenarios.
 
+Current compatibility testing is focused primarily on Rockchip-based Android development boards used for SSH remote access. This test scope does not guarantee equivalent behavior on other chipsets or vendor-customized systems. On non-rooted devices, some commands and protected paths are expected to remain unavailable because of Android sandbox and SELinux restrictions.
+
 ## 2. Use at Your Own Risk
 
 Users assume all risks arising from the use of this project, including but not limited to:

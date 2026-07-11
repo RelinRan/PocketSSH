@@ -583,11 +583,12 @@ class AndroidInteractiveShellFactoryTest {
     }
 
     @Test
-    fun gpuAndNpuCommandsDegradeGracefullyWhenDeviceNodesAreUnavailable() {
+    fun gpuAndNpuCommandsReturnStructuredStatusWhenDeviceNodesAreUnavailable() {
         val text = runShell("gpu\nnpu\nexit\n", timeoutSeconds = 3)
 
-        assertTrue(text, text.contains("GPU query failed"))
-        assertTrue(text, text.contains("NPU query failed"))
+        assertTrue(text, text.contains("GPU"))
+        assertTrue(text, text.contains("NPU"))
+        assertTrue(text, text.contains("status"))
     }
 
     @Test

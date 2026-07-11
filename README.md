@@ -4,6 +4,8 @@
 
 PocketSSH is a lightweight SSH server that runs locally on Android devices. It is designed for LAN device maintenance, debugging, file transfer, and automation control. The app provides a foreground SSH service, a deep-blue dark-tech configuration page, boot auto-start support, and standard SSH/SFTP/SCP compatibility for common desktop clients.
 
+The project is currently developed and tested primarily for SSH remote access on Rockchip-based Android development boards. Compatibility on phones, tablets, other chipsets, and vendor-customized Android systems may vary.
+
 PocketSSH is fully open source under the permissive MIT License. Personal use, commercial use, modification, redistribution, and integration into other products are allowed subject to the license notice requirements.
 
 ## Highlights
@@ -150,12 +152,14 @@ Project documentation follows a simple internationalized file layout:
 ## Important Notes
 
 - PocketSSH is not a system root shell. Commands run with the app's own permissions by default.
+- On a non-rooted device, some commands and protected paths cannot be accessed because the app does not have the required system privileges. This is an Android security restriction, not an SSH authentication issue.
 - Runtime behavior is limited by the Android app sandbox, file access rules, SELinux, system permissions, and device root state.
 - Commands requiring system-level privileges may need root or system signature permissions. Without those permissions, commands may return a clear failure message.
 - SFTP access is still limited by Android's actual file permissions.
 - On Android 11 and newer, grant PSSH the system All files access permission to browse shared storage. `Android/data`, `Android/obb`, and system `/data` may remain restricted by Android, SELinux, vendor policy, or root state.
 - Do not expose a weak-password SSH service directly to the public internet.
 - For commercial or batch deployment, perform security assessment, permission auditing, and password policy planning first.
+- The primary test environment is Rockchip-based Android development boards used for SSH remote maintenance. Test the required commands on the target hardware and Android build before deployment.
 
 ## License
 

@@ -122,13 +122,18 @@ The app supports boot broadcast handling and can automatically start the SSH ser
 ## 7. Permissions and Limits
 
 - PocketSSH is not a system root shell. It runs with the app's own permissions by default.
+- On non-rooted devices, commands that require privileged system access may fail with `Permission denied`, return limited information, or be unavailable. Protected directories such as system `/data` also remain inaccessible unless the Android system, SELinux policy, and device privileges permit access.
 - File access, app list visibility, process information, and system commands are limited by the Android version and device permissions.
 - High-privilege operations such as network configuration, system time changes, installation, uninstallation, and reboot may require root or system-level authorization.
 - If permission is missing, commands should return a clear error and should not crash the SSH service.
 - On Android 11 and newer, enable All files access when PSSH opens the system settings page. Returning to PSSH restarts the service automatically.
 - Android may still restrict `Android/data`, `Android/obb`, and system `/data` independently of shared-storage permission.
 
-## 8. Security Suggestions
+## 8. Tested Hardware Scope
+
+PocketSSH is currently developed and tested primarily on Rockchip-based Android development boards for SSH remote maintenance and file operations. Android behavior differs across chipsets, OS versions, SELinux policies, and vendor ROMs. Verify every command required by your deployment on the actual target device.
+
+## 9. Security Suggestions
 
 - Change the default username and password.
 - Do not expose the SSH port to the public internet.
