@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">PocketSSH</string>
+    <string name="app_name">PSSH</string>
     <string name="app_tagline">本地节点 / 安全访问</string>
     <string name="ssh_version_label">SSH // 2.12</string>
     <string name="node_status_label">节点状态</string>
