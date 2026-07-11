@@ -14,6 +14,8 @@ PocketSSH is fully open source under the permissive MIT License. Personal use, c
 - Automatically restarts the SSH service after saving configuration, so new settings take effect immediately.
 - Foreground service with boot auto-start support.
 - Supports SSH interactive shell, remote exec, SCP, and SFTP.
+- SSH shell and SFTP sessions start in shared storage (`/storage/emulated/0`) by default, so `ls` and the initial file list show sdcard contents immediately.
+- Android 11 and newer are guided to grant All files access; the SSH service restarts after the permission is granted.
 - SFTP path aliases for common Android storage paths:
   - `/sdcard`
   - `/storage/emulated/0`
@@ -83,6 +85,16 @@ Some OpenSSH clients may require legacy SCP mode:
 scp -O -P 2222 ./local.txt android@<device-ip>:/sdcard/Download/local.txt
 ```
 
+On connection, SFTP `/` represents the device shared-storage root. These paths are equivalent:
+
+```text
+/
+/sdcard
+/storage/emulated/0
+```
+
+Parent navigation from `/` remains at the shared-storage root and does not enter the protected Android system root.
+
 ## Build
 
 On macOS or Linux:
@@ -100,7 +112,7 @@ On Windows:
 The debug APK is generated with a versioned file name:
 
 ```text
-app/build/outputs/apk/debug/PocketSSH-v1.0.0001.apk
+app/build/outputs/apk/debug/PocketSSH-v1.0.0002.apk
 ```
 
 The naming format is:
@@ -114,11 +126,11 @@ PocketSSH-v{versionName}.{versionCode padded to 4 digits}.apk
 Push a version tag matching the generated APK version to publish a GitHub Release automatically:
 
 ```bash
-git tag v1.0.0001
-git push origin v1.0.0001
+git tag v1.0.0002
+git push origin v1.0.0002
 ```
 
-GitHub Actions runs the unit tests, builds an installable APK, creates the release, and attaches `PocketSSH-v1.0.0001.apk`. Update `versionName` and `versionCode` in `app/build.gradle.kts` before creating each new tag.
+GitHub Actions runs the unit tests, builds an installable APK, creates the release, and attaches `PocketSSH-v1.0.0002.apk`. Update `versionName` and `versionCode` in `app/build.gradle.kts` before creating each new tag.
 
 ## Documentation
 
@@ -141,6 +153,7 @@ Project documentation follows a simple internationalized file layout:
 - Runtime behavior is limited by the Android app sandbox, file access rules, SELinux, system permissions, and device root state.
 - Commands requiring system-level privileges may need root or system signature permissions. Without those permissions, commands may return a clear failure message.
 - SFTP access is still limited by Android's actual file permissions.
+- On Android 11 and newer, grant PSSH the system All files access permission to browse shared storage. `Android/data`, `Android/obb`, and system `/data` may remain restricted by Android, SELinux, vendor policy, or root state.
 - Do not expose a weak-password SSH service directly to the public internet.
 - For commercial or batch deployment, perform security assessment, permission auditing, and password policy planning first.
 

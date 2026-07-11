@@ -13,6 +13,14 @@ class SftpPathAliasTest {
     private val shadow = Paths.get("/data/user/0/app/cache/sftp-shadow")
 
     @Test
+    fun resolvesRemoteRootToSharedStorageWhenSshdProvidesEmptyRootDirectory() {
+        assertEquals(shared, resolveRemoteSftpPath(Paths.get(""), "/", shared, shadow))
+        assertEquals(shared, resolveRemoteSftpPath(Paths.get(""), ".", shared, shadow))
+        assertEquals(shared.resolve("Download"), resolveRemoteSftpPath(Paths.get(""), "/Download", shared, shadow))
+        assertEquals(shared, resolveRemoteSftpPath(Paths.get(""), "/..", shared, shadow))
+    }
+
+    @Test
     fun deniesProtectedAndroidDirectoriesInsteadOfOpeningEmptyShadowFolders() {
         assertTrue(isDeniedSftpPath("/data"))
         assertTrue(isDeniedSftpPath("/data/system"))
@@ -125,6 +133,8 @@ class SftpPathAliasTest {
         ensureSftpShadowTree(root)
 
         assertTrue(Files.isDirectory(root.resolve("storage")))
+        assertTrue(Files.isDirectory(root.resolve("virtual-root/storage")))
+        assertTrue(Files.isDirectory(root.resolve("virtual-root/sdcard")))
         assertTrue(Files.isDirectory(root.resolve("storage/emulated")))
         assertTrue(Files.isDirectory(root.resolve("storage/emulated/0")))
         assertTrue(Files.isDirectory(root.resolve("storage/self")))

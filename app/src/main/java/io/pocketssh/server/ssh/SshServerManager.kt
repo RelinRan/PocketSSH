@@ -2,11 +2,17 @@ package io.pocketssh.server.ssh
 
 import io.pocketssh.server.config.SshConfig
 import android.os.Environment
+import android.util.Log
 import org.apache.sshd.scp.server.ScpCommandFactory
 import org.apache.sshd.server.SshServer
 import org.apache.sshd.server.command.CommandFactory
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider
 import org.apache.sshd.sftp.server.SftpSubsystemFactory
+import org.apache.sshd.sftp.server.SftpSubsystem
+import org.apache.sshd.sftp.server.SftpFileSystemAccessor
+import org.apache.sshd.server.channel.ChannelSession
+import org.apache.sshd.server.command.Command
+import org.apache.sshd.server.Environment as SshEnvironment
 import java.io.Closeable
 import java.nio.file.Path
 
@@ -38,18 +44,17 @@ internal class SshServerManager(
                     runningAppResolver = resolvers.runningAppResolver,
                     cameraResolver = resolvers.cameraResolver,
                     volumeResolver = resolvers.volumeResolver,
+                    initialDirectory = sharedStoragePath().toFile(),
                 )
-            } ?: AndroidInteractiveShellFactory(promptUser = config.username)
+            } ?: AndroidInteractiveShellFactory(promptUser = config.username, initialDirectory = sharedStoragePath().toFile())
             commandFactory = ScpCommandFactory.Builder()
                 .withDelegate(CommandFactory { _, command ->
                     ProcessCommand(listOf("/system/bin/sh", "-c", command))
                 })
                 .build()
-            subsystemFactories = listOf(
-                SftpSubsystemFactory.Builder()
-                    .withFileSystemAccessor(SftpPathAliasAccessor(sharedStoragePath(), keyDirectory.resolve("sftp-shadow")))
-                    .build()
-            )
+            subsystemFactories = listOf(LoggingSftpSubsystemFactory(
+                SftpPathAliasAccessor(sharedStoragePath(), keyDirectory.resolve("sftp-shadow"))
+            ))
         }
         try {
             sshd.start()
@@ -82,5 +87,39 @@ internal class SshServerManager(
         }
 
         internal fun sharedStoragePath(): Path = Environment.getExternalStorageDirectory().toPath()
+    }
+}
+
+private class LoggingSftpSubsystemFactory(accessor: SftpFileSystemAccessor) : SftpSubsystemFactory() {
+    init {
+        fileSystemAccessor = accessor
+    }
+
+    override fun createSubsystem(channel: ChannelSession): Command = try {
+        Log.i(TAG, "Creating SFTP subsystem")
+        object : SftpSubsystem(channel, this) {
+            override fun start(channel: ChannelSession, env: SshEnvironment) = try {
+                Log.i(TAG, "Starting SFTP subsystem")
+                super.start(channel, env)
+            } catch (error: Throwable) {
+                Log.e(TAG, "Failed to start SFTP subsystem", error)
+                throw error
+            }
+
+            override fun run() = try {
+                Log.i(TAG, "Running SFTP subsystem")
+                super.run()
+            } catch (error: Throwable) {
+                Log.e(TAG, "SFTP subsystem terminated", error)
+                throw error
+            }
+        }
+    } catch (error: Throwable) {
+        Log.e(TAG, "Failed to create SFTP subsystem", error)
+        throw error
+    }
+
+    companion object {
+        private const val TAG = "PocketSSH-SFTP"
     }
 }

@@ -17,6 +17,22 @@ import java.util.concurrent.TimeUnit
 class AndroidInteractiveShellFactoryTest {
 
     @Test
+    fun shellStartsInConfiguredSharedStorageDirectory() {
+        val root = kotlin.io.path.createTempDirectory("pocketssh-shell-root").toFile()
+        File(root, "visible.txt").writeText("ok")
+        try {
+            val text = runShellWithFactory(
+                "pwd\nls\nexit\n",
+                AndroidInteractiveShellFactory(shellPath = shellPath(), initialDirectory = root),
+            )
+            assertTrue(text, text.contains(root.absolutePath))
+            assertTrue(text, text.contains("visible.txt"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun cdProtectedAndroidDirectoryReportsPermissionDeniedAndKeepsWorkingDirectory() {
         val text = runShell("pwd\ncd /data\npwd\ncd /storage/emulated/0/Android\npwd\nexit\n")
 

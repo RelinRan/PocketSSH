@@ -14,6 +14,8 @@ PocketSSH 采用宽松的 MIT 许可证完全开源，允许个人使用、商�
 - 保存配置后自动重启 SSH 服务，使新参数立即生效。
 - 支持前台服务和开机自动启动。
 - 支持 SSH interactive shell、远程 exec、SCP 和 SFTP。
+- SSH 命令行和 SFTP 默认从共享存储（`/storage/emulated/0`）启动，连接后直接执行 `ls` 或打开文件列表即可看到 sdcard 内容。
+- Android 11 及以上系统会引导授予“所有文件访问权限”，授权返回后自动重启 SSH 服务。
 - SFTP 支持常用 Android 存储路径别名：
   - `/sdcard`
   - `/storage/emulated/0`
@@ -83,6 +85,16 @@ scp -P 2222 ./local.txt android@<device-ip>:/sdcard/Download/local.txt
 scp -O -P 2222 ./local.txt android@<device-ip>:/sdcard/Download/local.txt
 ```
 
+SFTP 连接后的 `/` 表示设备共享存储根目录，以下路径等价：
+
+```text
+/
+/sdcard
+/storage/emulated/0
+```
+
+在 `/` 点击返回上一级仍停留在共享存储根目录，不会进入受保护的 Android 系统根目录。
+
 ## 构建
 
 macOS 或 Linux：
@@ -100,7 +112,7 @@ Windows：
 Debug APK 会生成带版本号的文件名：
 
 ```text
-app/build/outputs/apk/debug/PocketSSH-v1.0.0001.apk
+app/build/outputs/apk/debug/PocketSSH-v1.0.0002.apk
 ```
 
 命名格式为：
@@ -114,11 +126,11 @@ PocketSSH-v{versionName}.{versionCode 四位补零}.apk
 推送与 APK 版本一致的标签后，GitHub 会自动发布对应版本：
 
 ```bash
-git tag v1.0.0001
-git push origin v1.0.0001
+git tag v1.0.0002
+git push origin v1.0.0002
 ```
 
-GitHub Actions 会自动执行单元测试、构建可安装 APK、创建 Release，并上传 `PocketSSH-v1.0.0001.apk`。发布新版本前，请先修改 `app/build.gradle.kts` 中的 `versionName` 和 `versionCode`。
+GitHub Actions 会自动执行单元测试、构建可安装 APK、创建 Release，并上传 `PocketSSH-v1.0.0002.apk`。发布新版本前，请先修改 `app/build.gradle.kts` 中的 `versionName` 和 `versionCode`。
 
 ## 文档
 
@@ -141,6 +153,7 @@ GitHub Actions 会自动执行单元测试、构建可安装 APK、创建 Releas
 - 服务行为受 Android 应用沙箱、文件访问规则、SELinux、系统权限和设备 root 状态限制。
 - 需要系统级权限的命令可能需要 root 或系统签名权限；缺少权限时应返回明确失败信息。
 - SFTP 访问范围仍受 Android 实际文件权限限制。
+- Android 11 及以上系统需为 PSSH 开启“所有文件访问权限”才能浏览共享存储；`Android/data`、`Android/obb` 和系统 `/data` 仍可能受 Android、SELinux、厂商策略或 root 状态限制。
 - 请不要在公网环境直接暴露弱密码 SSH 服务。
 - 商业或批量部署前，应先进行安全评估、权限审计和密码策略规划。
 

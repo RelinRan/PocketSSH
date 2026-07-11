@@ -51,6 +51,8 @@ ssh -p 2222 android@192.168.15.109
 help
 ```
 
+The interactive shell starts in `/storage/emulated/0`. Therefore, `pwd` reports the shared-storage path and `ls` without arguments lists sdcard files.
+
 Common command examples:
 
 ```text
@@ -82,6 +84,8 @@ After connecting, common Android storage paths are supported:
 /storage/emulated/0
 /storage/self/primary
 ```
+
+The SFTP root `/` defaults to shared storage. `/`, `/sdcard`, and `/storage/emulated/0` show the same contents. Navigating above `/` remains at this shared-storage root.
 
 Examples:
 
@@ -121,6 +125,8 @@ The app supports boot broadcast handling and can automatically start the SSH ser
 - File access, app list visibility, process information, and system commands are limited by the Android version and device permissions.
 - High-privilege operations such as network configuration, system time changes, installation, uninstallation, and reboot may require root or system-level authorization.
 - If permission is missing, commands should return a clear error and should not crash the SSH service.
+- On Android 11 and newer, enable All files access when PSSH opens the system settings page. Returning to PSSH restarts the service automatically.
+- Android may still restrict `Android/data`, `Android/obb`, and system `/data` independently of shared-storage permission.
 
 ## 8. Security Suggestions
 

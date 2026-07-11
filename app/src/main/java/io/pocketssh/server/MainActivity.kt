@@ -6,8 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -33,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var endpoint: TextView
     private lateinit var error: TextView
     private lateinit var power: MaterialButton
+    private var storageSettingsOpened = false
     private val defaults by lazy { SshConfig(BuildConfig.SSH_BIND_ADDRESS, BuildConfig.SSH_PORT, BuildConfig.SSH_USERNAME, BuildConfig.SSH_PASSWORD, true) }
 
     private val stateReceiver = object : BroadcastReceiver() {
@@ -59,6 +63,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.saveButton).setOnClickListener { saveAndApply() }
         power.setOnClickListener { toggleService() }
         requestNotificationPermission()
+        requestAllFilesAccessIfNeeded()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (storageSettingsOpened && !shouldRequestAllFilesAccess(Build.VERSION.SDK_INT, hasAllFilesAccess())) {
+            storageSettingsOpened = false
+            stopServiceCommand()
+            startServiceCommand()
+        }
     }
 
     override fun onStart() {
@@ -152,7 +166,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun requestAllFilesAccessIfNeeded() {
+        if (!shouldRequestAllFilesAccess(Build.VERSION.SDK_INT, hasAllFilesAccess())) return
+        storageSettingsOpened = true
+        val appSettings = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            .setData(Uri.parse("package:$packageName"))
+        runCatching { startActivity(appSettings) }
+            .getOrElse { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+    }
+
+    private fun hasAllFilesAccess(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+
     companion object {
         internal fun shouldRecoverService(state: SshState): Boolean = state == SshState.STARTING || state == SshState.RUNNING
+        internal fun shouldRequestAllFilesAccess(sdk: Int, granted: Boolean): Boolean =
+            sdk >= Build.VERSION_CODES.R && !granted
     }
 }

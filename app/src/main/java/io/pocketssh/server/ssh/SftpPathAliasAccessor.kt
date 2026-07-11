@@ -11,6 +11,7 @@ import java.nio.file.AccessDeniedException
 import java.nio.channels.Channel
 import java.nio.channels.SeekableByteChannel
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.LinkOption
 import java.nio.file.Files
 import java.nio.file.DirectoryStream
@@ -45,13 +46,27 @@ internal fun resolveRemoteSftpPath(
 ): Path {
     val normalizedRemote = remotePath.replace('\\', '/')
     val remote = if (normalizedRemote.startsWith('/')) normalizedRemote else "/$normalizedRemote"
+    val normalizedSegments = remote.split('/').filter { it.isNotBlank() && it != "." }
+        .fold(mutableListOf<String>()) { parts, segment ->
+            if (segment == "..") {
+                if (parts.isNotEmpty()) parts.removeAt(parts.lastIndex)
+            } else {
+                parts.add(segment)
+            }
+            parts
+        }
+    val normalizedLogical = "/" + normalizedSegments.joinToString("/")
+    if (normalizedLogical == "/") return sharedStorage.normalize()
     val shadowPrefix = shadowRoot?.normalize()?.toString()?.replace('\\', '/')
     if (shadowPrefix != null && remote.startsWith(shadowPrefix)) {
-        return Path.of(remote).normalize()
+        return Paths.get(remote).normalize()
     }
     rootBackedRemotePath(remote)?.let { restricted ->
         return shadowRoot?.resolve("root/${restricted.removePrefix("/")}")?.normalize()
             ?: sharedStorage.resolve(restricted.removePrefix("/storage/emulated/0").removePrefix("/")).normalize()
+    }
+    if (remote == "/sdcard" || remote.startsWith("/sdcard/")) {
+        return sharedStorage.resolve(remote.removePrefix("/sdcard").removePrefix("/")).normalize()
     }
     if (remote == "/storage/emulated/0" || remote.startsWith("/storage/emulated/0/")) {
         if (shadowRoot != null && remote == "/storage/emulated/0/Android") {
@@ -65,8 +80,7 @@ internal fun resolveRemoteSftpPath(
     if (shadowRoot != null && (remote == "/storage" || remote == "/storage/emulated" || remote == "/storage/self")) {
         return shadowRoot.resolve(remote.removePrefix("/")).normalize()
     }
-    val logical = rootDir.resolve(remote.removePrefix("/")).normalize()
-    return resolveSftpAlias(logical, sharedStorage)
+    return sharedStorage.resolve(normalizedLogical.removePrefix("/")).normalize()
 }
 
 internal fun sftpSdcardDirectoryAttributes(timestamp: Long): Map<String, Any> {
@@ -110,7 +124,16 @@ internal fun ensureSftpShadowTree(shadowRoot: Path) {
         shadowRoot.resolve("root/storage/emulated/0/Android"),
         shadowRoot.resolve("root/storage/emulated/0/Android/data"),
         shadowRoot.resolve("root/storage/emulated/0/Android/obb"),
+        shadowRoot.resolve("virtual-root"),
     ).forEach { path -> Files.createDirectories(path) }
+    ensureDirectoryLink(shadowRoot.resolve("virtual-root/sdcard"), shadowRoot.resolve("storage/emulated/0"))
+    ensureDirectoryLink(shadowRoot.resolve("virtual-root/storage"), shadowRoot.resolve("storage"))
+}
+
+private fun ensureDirectoryLink(link: Path, target: Path) {
+    if (Files.exists(link, LinkOption.NOFOLLOW_LINKS)) return
+    runCatching { Files.createSymbolicLink(link, target) }
+        .getOrElse { Files.createDirectories(link) }
 }
 
 internal fun rootBackedRemotePath(remote: String): String? {

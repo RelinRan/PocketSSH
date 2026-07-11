@@ -51,6 +51,8 @@ ssh -p 2222 android@192.168.15.109
 help
 ```
 
+交互命令行默认目录为 `/storage/emulated/0`，因此 `pwd` 会显示共享存储路径，无参数 `ls` 会直接列出 sdcard 文件。
+
 常用命令示例：
 
 ```text
@@ -82,6 +84,8 @@ sftp -P 2222 android@192.168.15.109
 /storage/emulated/0
 /storage/self/primary
 ```
+
+SFTP 的 `/` 默认表示共享存储根目录。`/`、`/sdcard` 和 `/storage/emulated/0` 显示相同内容；从 `/` 返回上一级仍停留在共享存储根目录。
 
 示例：
 
@@ -121,6 +125,8 @@ scp -O -P 2222 ./local.txt android@192.168.15.109:/sdcard/Download/local.txt
 - Android 设备的文件访问、应用列表、进程信息和系统命令受系统版本与权限限制。
 - 涉及网络配置、系统时间、安装卸载、重启等高权限操作时，设备可能需要 root 或系统级授权。
 - 无权限时命令应返回明确错误，不应导致 SSH 服务崩溃。
+- Android 11 及以上系统中，PSSH 打开系统设置页时请开启“所有文件访问权限”，返回应用后服务会自动重启。
+- 即使已授予共享存储权限，Android 仍可能单独限制 `Android/data`、`Android/obb` 和系统 `/data`。
 
 ## 8. 安全建议
 

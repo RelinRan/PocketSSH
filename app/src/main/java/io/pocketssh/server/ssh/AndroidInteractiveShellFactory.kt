@@ -50,10 +50,11 @@ class AndroidInteractiveShellFactory(
     private val runningAppResolver: () -> List<RunningAppInfo> = { emptyList() },
     private val cameraResolver: () -> List<CameraInfo> = { emptyList() },
     private val volumeResolver: () -> List<VolumeInfo> = { emptyList() },
+    private val initialDirectory: File = File("/"),
 ) : ShellFactory {
 
     override fun createShell(channel: ChannelSession): Command {
-        return AndroidInteractiveShell(shellPath, promptUser, promptHost, appInfoResolver, appListResolver, appLaunchActivityResolver, appStartResolver, runningAppResolver, cameraResolver, volumeResolver)
+        return AndroidInteractiveShell(shellPath, promptUser, promptHost, appInfoResolver, appListResolver, appLaunchActivityResolver, appStartResolver, runningAppResolver, cameraResolver, volumeResolver, initialDirectory)
     }
 
     data class AppInfo(
@@ -112,6 +113,7 @@ class AndroidInteractiveShellFactory(
         private val runningAppResolver: () -> List<RunningAppInfo>,
         private val cameraResolver: () -> List<CameraInfo>,
         private val volumeResolver: () -> List<VolumeInfo>,
+        initialDirectory: File,
     ) : Command {
         private val running = AtomicBoolean(false)
         private val executor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -119,7 +121,7 @@ class AndroidInteractiveShellFactory(
         private var output: OutputStream? = null
         private var error: OutputStream? = null
         private var callback: ExitCallback? = null
-        private var cwd: File = File("/")
+        private var cwd: File = initialDirectory.takeIf { it.isDirectory } ?: File("/")
         private val commandRunner = RemoteCommandRunner(shellPath, { cwd }, ::consumeCtrlC)
         private var sqliteDb: File? = null
         private var ignoreNextLf = false
