@@ -39,15 +39,27 @@ jobs:
         id: apk
         shell: pwsh
         run: |
-          $apk = Get-ChildItem app/build/outputs/apk/debug/PocketSSH-v*.apk | Select-Object -First 1
-          if (-not $apk) {
-            throw "Generated PocketSSH APK was not found"
-          fi
-          if ($env:GITHUB_REF_TYPE -eq "tag" -and $apk.Name -ne "PocketSSH-$($env:GITHUB_REF_NAME).apk") {
-            throw "Tag $($env:GITHUB_REF_NAME) does not match generated APK $($apk.Name)"
+          $gradle = Get-Content app/build.gradle.kts -Raw
+          $versionName = [regex]::Match($gradle, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
+          $versionCode = [int][regex]::Match($gradle, 'versionCode\s*=\s*(\d+)').Groups[1].Value
+          if (-not $versionName -or $versionCode -le 0) {
+            throw "Unable to read application version from app/build.gradle.kts"
           }
-          "path=$($apk.FullName)" >> $env:GITHUB_OUTPUT
-          "name=$($apk.Name)" >> $env:GITHUB_OUTPUT
+          $version = "v$versionName.$($versionCode.ToString('0000'))"
+          $apkName = "PocketSSH-$version.apk"
+          $sourceApk = Get-ChildItem app/build/outputs/apk/debug -Recurse -Filter *.apk | Select-Object -First 1
+          if (-not $sourceApk) {
+            throw "Generated APK was not found"
+          }
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $version) {
+            throw "Tag $($env:GITHUB_REF_NAME) does not match application version $version"
+          }
+          $releaseDir = Join-Path $env:RUNNER_TEMP "pocketssh-release"
+          New-Item -ItemType Directory -Force $releaseDir | Out-Null
+          $apkPath = Join-Path $releaseDir $apkName
+          Copy-Item $sourceApk.FullName $apkPath
+          "path=$apkPath" >> $env:GITHUB_OUTPUT
+          "name=$apkName" >> $env:GITHUB_OUTPUT
 
       - name: Upload CI artifact
         uses: actions/upload-artifact@v4
