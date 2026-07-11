@@ -30,7 +30,17 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Run unit tests
-        run: .\gradlew.bat --no-daemon :app:testDebugUnitTest
+        run: .\gradlew.bat --no-daemon --stacktrace :app:testDebugUnitTest
+
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
 
       - name: Build installable APK
         run: .\gradlew.bat --no-daemon :app:assembleDebug
