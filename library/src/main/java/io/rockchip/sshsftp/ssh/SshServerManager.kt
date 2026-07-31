@@ -46,12 +46,19 @@ class SshServerManager(
                     runningAppResolver = resolvers.runningAppResolver,
                     cameraResolver = resolvers.cameraResolver,
                     volumeResolver = resolvers.volumeResolver,
-                    initialDirectory = sharedStoragePath().toFile(),
+                    initialDirectory = shellInitialDirectory(rootAccess).toFile(),
+                    sharedStorageDirectory = sharedStoragePath().toFile(),
+                    rootAccess = rootAccess,
                 )
-            } ?: AndroidInteractiveShellFactory(promptUser = config.username, initialDirectory = sharedStoragePath().toFile())
+            } ?: AndroidInteractiveShellFactory(
+                promptUser = config.username,
+                initialDirectory = shellInitialDirectory(rootAccess).toFile(),
+                sharedStorageDirectory = sharedStoragePath().toFile(),
+                rootAccess = rootAccess,
+            )
             commandFactory = ScpCommandFactory.Builder()
                 .withDelegate(CommandFactory { _, command ->
-                    ProcessCommand(listOf("/system/bin/sh", "-c", command))
+                    ProcessCommand(execCommandLine(command, rootAccess))
                 })
                 .build()
             subsystemFactories = listOf(LoggingSftpSubsystemFactory(
@@ -93,6 +100,12 @@ class SshServerManager(
         }
 
         internal fun sharedStoragePath(): Path = Environment.getExternalStorageDirectory().toPath()
+
+        private fun shellInitialDirectory(rootAccess: Boolean = false): Path =
+            if (rootAccess) Path.of("/") else sharedStoragePath()
+
+        internal fun execCommandLine(command: String, rootAccess: Boolean): List<String> =
+            if (rootAccess) listOf("su", "0", "/system/bin/sh", "-c", command) else listOf("/system/bin/sh", "-c", command)
 
         fun detectRootAccess(timeoutMs: Long = 2000L): Boolean {
             val process = runCatching {

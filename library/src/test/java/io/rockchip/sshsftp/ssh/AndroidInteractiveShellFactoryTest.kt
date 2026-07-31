@@ -1,4 +1,4 @@
-package io.rockchip.sshsftp.ssh
+﻿package io.rockchip.sshsftp.ssh
 
 import org.apache.sshd.server.ExitCallback
 import org.apache.sshd.server.channel.ChannelSession
@@ -25,7 +25,7 @@ class AndroidInteractiveShellFactoryTest {
                 "pwd\nls\nexit\n",
                 AndroidInteractiveShellFactory(shellPath = shellPath(), initialDirectory = root),
             )
-            assertTrue(text, text.contains(root.absolutePath))
+            assertTrue(text, text.contains(root.name))
             assertTrue(text, text.contains("visible.txt"))
         } finally {
             root.deleteRecursively()
@@ -41,6 +41,40 @@ class AndroidInteractiveShellFactoryTest {
         val expectedDirectory = File("/").absolutePath
         val rootLines = text.lineSequence().map { it.trim() }.filter { it == expectedDirectory }.count()
         assertTrue(text, rootLines >= 3)
+    }
+
+    @Test
+    fun nonRootShellKeepsSharedStorageAsVirtualRootWhenNavigatingUp() {
+        val root = kotlin.io.path.createTempDirectory("pocketssh-shell-root").toFile()
+        try {
+            val text = runShellWithFactory(
+                "pwd\ncd ..\npwd\nexit\n",
+                AndroidInteractiveShellFactory(shellPath = shellPath(), initialDirectory = root, sharedStorageDirectory = root, rootAccess = false),
+            )
+
+            val rootLines = Regex(Regex.escape(root.name)).findAll(text).count()
+            assertTrue(text, rootLines >= 2)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun rootedShellCanNavigateAboveSharedStorageAndEnterData() {
+        val root = kotlin.io.path.createTempDirectory("pocketssh-shell-root").toFile()
+        val data = kotlin.io.path.createTempDirectory("pocketssh-shell-data").toFile()
+        try {
+            val text = runShellWithFactory(
+                "cd ${root.absolutePath}\ncd ..\npwd\ncd ${data.absolutePath}\npwd\nexit\n",
+                AndroidInteractiveShellFactory(shellPath = shellPath(), initialDirectory = File("/"), sharedStorageDirectory = root, rootAccess = true),
+            )
+
+            assertTrue(text, text.contains(root.parentFile.absolutePath))
+            assertTrue(text, text.contains(data.absolutePath))
+        } finally {
+            root.deleteRecursively()
+            data.deleteRecursively()
+        }
     }
 
     @Test

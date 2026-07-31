@@ -47,6 +47,16 @@ internal fun resolveRemoteSftpPath(
 ): Path {
     val normalizedRemote = remotePath.replace('\\', '/')
     val remote = if (normalizedRemote.startsWith('/')) normalizedRemote else "/$normalizedRemote"
+    return resolveSharedRemotePath(remote, sharedStorage, shadowRoot, rootAccess)
+}
+
+internal fun resolveSharedRemotePath(
+    remotePath: String,
+    sharedStorage: Path,
+    shadowRoot: Path? = null,
+    rootAccess: Boolean = false,
+): Path {
+    val remote = if (remotePath.startsWith('/')) remotePath else "/$remotePath"
     val normalizedSegments = remote.split('/').filter { it.isNotBlank() && it != "." }
         .fold(mutableListOf<String>()) { parts, segment ->
             if (segment == "..") {
@@ -60,13 +70,13 @@ internal fun resolveRemoteSftpPath(
     if (rootAccess) {
         if (normalizedLogical == "/") return Paths.get("/").normalize()
         if (remote == "/sdcard" || remote.startsWith("/sdcard/")) {
-            return sharedStorage.resolve(remote.removePrefix("/sdcard").removePrefix("/")).normalize()
+            return resolveStorageRelative(remote.removePrefix("/sdcard"), sharedStorage, rootAccess)
         }
         if (remote == "/storage/emulated/0" || remote.startsWith("/storage/emulated/0/")) {
-            return Paths.get(remote).normalize()
+            return resolveStorageRelative(remote.removePrefix("/storage/emulated/0"), sharedStorage, rootAccess)
         }
         if (remote == "/storage/self/primary" || remote.startsWith("/storage/self/primary/")) {
-            return sharedStorage.resolve(remote.removePrefix("/storage/self/primary").removePrefix("/")).normalize()
+            return resolveStorageRelative(remote.removePrefix("/storage/self/primary"), sharedStorage, rootAccess)
         }
         return Paths.get(normalizedLogical).normalize()
     }
@@ -80,21 +90,64 @@ internal fun resolveRemoteSftpPath(
             ?: sharedStorage.resolve(restricted.removePrefix("/storage/emulated/0").removePrefix("/")).normalize()
     }
     if (remote == "/sdcard" || remote.startsWith("/sdcard/")) {
-        return sharedStorage.resolve(remote.removePrefix("/sdcard").removePrefix("/")).normalize()
+        return resolveStorageRelative(remote.removePrefix("/sdcard"), sharedStorage, rootAccess)
     }
     if (remote == "/storage/emulated/0" || remote.startsWith("/storage/emulated/0/")) {
         if (shadowRoot != null && remote == "/storage/emulated/0/Android") {
             return shadowRoot.resolve("root/storage/emulated/0/Android").normalize()
         }
-        return sharedStorage.resolve(remote.removePrefix("/storage/emulated/0").removePrefix("/")).normalize()
+        return resolveStorageRelative(remote.removePrefix("/storage/emulated/0"), sharedStorage, rootAccess)
     }
     if (remote == "/storage/self/primary" || remote.startsWith("/storage/self/primary/")) {
-        return sharedStorage.resolve(remote.removePrefix("/storage/self/primary").removePrefix("/")).normalize()
+        return resolveStorageRelative(remote.removePrefix("/storage/self/primary"), sharedStorage, rootAccess)
     }
     if (shadowRoot != null && (remote == "/storage" || remote == "/storage/emulated" || remote == "/storage/self")) {
         return shadowRoot.resolve(remote.removePrefix("/")).normalize()
     }
     return sharedStorage.resolve(normalizedLogical.removePrefix("/")).normalize()
+}
+
+internal fun resolveShellPath(
+    currentDirectory: Path,
+    requestedPath: String,
+    sharedStorage: Path,
+    rootAccess: Boolean,
+): Path {
+    val normalized = requestedPath.replace('\\', '/')
+    if (Regex("^[A-Za-z]:/.*").matches(normalized)) return Paths.get(normalized).normalize()
+    val relativeSegments = normalized.split('/').filter { it.isNotBlank() && it != "." }
+    if (!normalized.startsWith("/") &&
+        currentDirectory.normalize() == sharedStorage.normalize() &&
+        relativeSegments.firstOrNull() == ".."
+    ) {
+        return if (rootAccess) Paths.get("/").normalize() else sharedStorage.normalize()
+    }
+    val absolute = when {
+        normalized.isBlank() -> if (rootAccess) "/" else "/storage/emulated/0"
+        normalized.startsWith("/") -> normalized
+        else -> currentDirectory.resolve(normalized).normalize().toString().replace('\\', '/')
+    }
+    return if (rootAccess) {
+        resolveSharedRemotePath(absolute, sharedStorage, rootAccess = true)
+    } else {
+        resolveSharedRemotePath(absolute, sharedStorage, rootAccess = false)
+    }
+}
+
+private fun resolveStorageRelative(suffix: String, sharedStorage: Path, rootAccess: Boolean): Path {
+    val parts = suffix.split('/').filter { it.isNotBlank() && it != "." }
+    if (parts.isNotEmpty() && parts.first() == "..") {
+        return if (rootAccess) Paths.get("/").normalize() else sharedStorage.normalize()
+    }
+    val cleaned = parts.fold(mutableListOf<String>()) { result, segment ->
+        if (segment == "..") {
+            if (result.isNotEmpty()) result.removeAt(result.lastIndex)
+        } else {
+            result.add(segment)
+        }
+        result
+    }
+    return cleaned.fold(sharedStorage.normalize()) { path, segment -> path.resolve(segment) }.normalize()
 }
 
 internal fun sftpSdcardDirectoryAttributes(timestamp: Long): Map<String, Any> {

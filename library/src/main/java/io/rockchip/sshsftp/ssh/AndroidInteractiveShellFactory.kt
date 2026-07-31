@@ -28,13 +28,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * #文件下载
  * download https://xxxx xxx.apk
  *
- * #拉取设备文件到本�?
+ * #拉取设备文件到本�?
  * scp -O -P 2222 -r BSD874EF28FA48@192.168.15.109:/sdcard/HandHygiene/db E:\db
  *
- * #拷贝本地文件到设�?
+ * #拷贝本地文件到设�?
  * scp -O -P 2222 -r E:\novel.zip BSD874EF28FA48@192.168.15.109:/sdcard/
  */
 class AndroidInteractiveShellFactory(
@@ -52,10 +51,12 @@ class AndroidInteractiveShellFactory(
     private val cameraResolver: () -> List<CameraInfo> = { emptyList() },
     private val volumeResolver: () -> List<VolumeInfo> = { emptyList() },
     private val initialDirectory: File = File("/"),
+    private val sharedStorageDirectory: File = File("/"),
+    private val rootAccess: Boolean = false,
 ) : ShellFactory {
 
     override fun createShell(channel: ChannelSession): Command {
-        return AndroidInteractiveShell(shellPath, promptUser, promptHost, appInfoResolver, appListResolver, appLaunchActivityResolver, appStartResolver, runningAppResolver, cameraResolver, volumeResolver, initialDirectory)
+        return AndroidInteractiveShell(shellPath, promptUser, promptHost, appInfoResolver, appListResolver, appLaunchActivityResolver, appStartResolver, runningAppResolver, cameraResolver, volumeResolver, initialDirectory, sharedStorageDirectory, rootAccess)
     }
 
     data class AppInfo(
@@ -115,6 +116,8 @@ class AndroidInteractiveShellFactory(
         private val cameraResolver: () -> List<CameraInfo>,
         private val volumeResolver: () -> List<VolumeInfo>,
         initialDirectory: File,
+        private val sharedStorageDirectory: File,
+        private val rootAccess: Boolean,
     ) : Command {
         private val running = AtomicBoolean(false)
         private val executor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -122,13 +125,24 @@ class AndroidInteractiveShellFactory(
         private var output: OutputStream? = null
         private var error: OutputStream? = null
         private var callback: ExitCallback? = null
-        private var cwd: File = initialDirectory.takeIf { it.isDirectory } ?: File("/")
+        private var cwd: File = initialDirectoryDirectory(initialDirectory)
         private val commandRunner = RemoteCommandRunner(shellPath, { cwd }, ::consumeCtrlC)
         private var sqliteDb: File? = null
         private var ignoreNextLf = false
         private val pendingInput = ArrayDeque<Int>()
         private val history = mutableListOf<String>()
         private var historyIndex = 0
+
+        private fun initialDirectoryDirectory(initialDirectory: File): File {
+            val defaultRoot = File("/").absoluteFile.normalize()
+            val requested = initialDirectory.absoluteFile.normalize()
+            return when {
+                rootAccess -> requested.takeIf { it.isDirectory } ?: File("/")
+                requested == defaultRoot -> sharedStorageDirectory
+                requested.isDirectory -> requested
+                else -> sharedStorageDirectory
+            }
+        }
 
         override fun setInputStream(input: InputStream) {
             this.input = input
@@ -319,6 +333,7 @@ class AndroidInteractiveShellFactory(
         private fun handleBuiltinCommand(line: String, reader: LineReader): Boolean {
             val args = splitArgs(line)
             if (args.isEmpty()) return true
+            if (rootAccess && args[0] in ROOT_SYSTEM_FILE_COMMANDS) return false
             when (args[0]) {
                 "ls" -> {
                     listFiles(args.drop(1))
@@ -575,20 +590,18 @@ class AndroidInteractiveShellFactory(
 
         private fun changeDirectory(path: String) {
             val requestedPath = path.ifBlank { "/" }
-            if (requestedPath.startsWith("/") && isDeniedSftpPath(requestedPath)) {
+            if (requestedPath.startsWith("/") && isDeniedSftpPath(requestedPath, rootAccess)) {
                 write("cd: $requestedPath: Permission denied\r\n")
                 return
             }
-            val target = when {
-                path.isBlank() -> File("/")
-                path.startsWith("/") -> File(path)
-                else -> File(cwd, path)
-            }.normalize()
+            val target = resolvePath(path.ifBlank { if (rootAccess) "/" else sharedStorageDirectory.absolutePath })
 
             when {
-                target.isDirectory && target.canRead() && target.canExecute() ->
+                target.isDirectory && (rootAccess || (target.canRead() && target.canExecute())) ->
                     cwd = target
-                target.exists() ->
+                rootAccess && rootDirectoryExists(target) ->
+                    cwd = target
+                target.exists() || (rootAccess && rootPathExists(target)) ->
                     write("cd: ${target.path}: Permission denied\r\n")
                 else ->
                     write("cd: ${target.path}: No such directory\r\n")
@@ -597,8 +610,7 @@ class AndroidInteractiveShellFactory(
 
         private fun executeCommand(command: String) {
             try {
-                val process = ProcessBuilder(shellPath, "-c", command)
-                    .directory(cwd)
+                val process = shellProcess(command)
                     .redirectErrorStream(true)
                     .start()
                 val outputBuffer = ByteArrayOutputStream()
@@ -659,6 +671,18 @@ class AndroidInteractiveShellFactory(
                 write("interrupted\r\n")
             }
         }
+
+        private fun shellProcess(command: String): ProcessBuilder {
+            if (!rootAccess) return ProcessBuilder(shellPath, "-c", command).directory(cwd)
+            val rootedCommand = "cd ${shellEscape(cwd.absolutePath)} && $command"
+            return ProcessBuilder("su", "0", shellPath, "-c", rootedCommand)
+        }
+
+        private fun rootDirectoryExists(path: File): Boolean =
+            executeFirstResult(rootShellCommands("test -d ${shellEscape(path.absolutePath)}")).code == 0
+
+        private fun rootPathExists(path: File): Boolean =
+            executeFirstResult(rootShellCommands("test -e ${shellEscape(path.absolutePath)}")).code == 0
 
         private fun consumeCtrlC(): Boolean {
             val source = input ?: return false
@@ -3961,11 +3985,12 @@ class AndroidInteractiveShellFactory(
         }
 
         private fun resolvePath(path: String): File {
-            val file = File(path)
-            return when {
-                file.isAbsolute -> file
-                else -> File(cwd, path)
-            }.normalize()
+            return resolveShellPath(
+                currentDirectory = cwd.toPath(),
+                requestedPath = path,
+                sharedStorage = sharedStorageDirectory.toPath(),
+                rootAccess = rootAccess,
+            ).toFile()
         }
 
         private fun splitArgs(line: String): List<String> {
@@ -4763,6 +4788,7 @@ class AndroidInteractiveShellFactory(
         const val DEFAULT_SHELL = "/system/bin/sh"
         private const val DEFAULT_PROMPT_USER = "android"
         private const val DEFAULT_PROMPT_HOST = "android"
+            private val ROOT_SYSTEM_FILE_COMMANDS = setOf("ls", "cat", "rm", "mkdir", "cp", "mv", "touch")
         private const val COMMAND_TIMEOUT_SECONDS = 10L
         private const val HTOP_COMMAND_TIMEOUT_SECONDS = 2L
         private const val HTOP_DEFAULT_LIMIT = 30

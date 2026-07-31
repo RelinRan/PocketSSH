@@ -1,6 +1,7 @@
 package io.rockchip.sshsftp.ssh
 
 import io.rockchip.sshsftp.config.SshConfig
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,6 +14,18 @@ class SshServerManagerTest {
         assertTrue(SshServerManager.credentialsMatch(config, "android", "secret"))
         assertFalse(SshServerManager.credentialsMatch(config, "Android", "secret"))
         assertFalse(SshServerManager.credentialsMatch(config, "android", "Secret"))
+    }
+
+    @Test
+    fun `exec commands use root shell when root access is available`() {
+        assertEquals(
+            listOf("su", "0", "/system/bin/sh", "-c", "ls /data"),
+            SshServerManager.execCommandLine("ls /data", rootAccess = true),
+        )
+        assertEquals(
+            listOf("/system/bin/sh", "-c", "ls /data"),
+            SshServerManager.execCommandLine("ls /data", rootAccess = false),
+        )
     }
 
     @Test

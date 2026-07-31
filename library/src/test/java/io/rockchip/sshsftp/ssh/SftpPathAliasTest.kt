@@ -34,6 +34,28 @@ class SftpPathAliasTest {
     }
 
     @Test
+    fun rootedStorageAliasReturnsToFilesystemRoot() {
+        assertEquals(
+            Paths.get("/"),
+            resolveRemoteSftpPath(Paths.get("/"), "/storage/emulated/0/..", shared, shadow, rootAccess = true)
+        )
+        assertEquals(
+            Paths.get("/"),
+            resolveRemoteSftpPath(Paths.get("/"), "/sdcard/..", shared, shadow, rootAccess = true)
+        )
+    }
+
+    @Test
+    fun shellNavigationUsesTheSameRootBoundaryAsSftp() {
+        assertEquals(Paths.get("/"), resolveShellPath(shared, "..", shared, rootAccess = true))
+        assertEquals(shared, resolveShellPath(shared, "..", shared, rootAccess = false))
+        assertEquals(
+            Paths.get("/data/system"),
+            resolveShellPath(Paths.get("/"), "/data/system", shared, rootAccess = true)
+        )
+    }
+
+    @Test
     fun doesNotDenyAndroidDirectoryWhenRooted() {
         assertFalse(isDeniedSftpPath("/storage/emulated/0/Android", rootAccess = true))
         assertFalse(isDeniedSftpPath("/storage/emulated/0/Android/data", rootAccess = true))
