@@ -95,6 +95,7 @@ jobs:
         id: apk
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $properties = Get-Content gradle.properties -Raw
           $versionName = [regex]::Match($properties, '(?m)^project\.versionName=(.+)$').Groups[1].Value.Trim()
           $versionCode = [int][regex]::Match($properties, '(?m)^project\.versionCode=(\d+)$').Groups[1].Value
@@ -105,16 +106,18 @@ jobs:
           $apkName = "rockchip-ssh-sftp-$version.apk"
           $libraryAarName = "rockchip-ssh-sftp-library-$version.aar"
           $libraryJarName = "rockchip-ssh-sftp-library-$version-all.jar"
-          $sourceApk = Get-ChildItem app/build/outputs/apk/release -Recurse -Filter *.apk | Select-Object -First 1
-          $sourceAar = Get-Item "library/build/outputs/aar/$libraryAarName" -ErrorAction SilentlyContinue
-          $sourceJar = Get-Item "library/build/outputs/jar/$libraryJarName" -ErrorAction SilentlyContinue
+          $sourceApk = Get-Item "app/build/outputs/apk/release/$apkName"
+          $sourceAar = Get-Item "library/build/outputs/aar/$libraryAarName"
+          $sourceJar = Get-Item "library/build/outputs/jar/$libraryJarName"
           if (-not $sourceApk -or -not $sourceAar -or -not $sourceJar) {
             throw "One or more release artifacts were not generated"
           }
+          Write-Host "Packaging: $($sourceApk.FullName), $($sourceAar.FullName), $($sourceJar.FullName)"
           if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $version) {
             throw "Tag $($env:GITHUB_REF_NAME) does not match application version $version"
           }
           $releaseDir = Join-Path $env:RUNNER_TEMP "rockchip-ssh-sftp-release"
+          if (Test-Path $releaseDir) { Remove-Item $releaseDir -Recurse -Force }
           New-Item -ItemType Directory -Force $releaseDir | Out-Null
           $apkPath = Join-Path $releaseDir $apkName
           $aarPath = Join-Path $releaseDir $libraryAarName
@@ -126,16 +129,17 @@ jobs:
             $hash = Get-FileHash $_ -Algorithm SHA256
             "$($hash.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_))"
           }
-          $checksums | Set-Content (Join-Path $releaseDir "SHA256SUMS.txt")
+          $checksums | Set-Content (Join-Path $releaseDir "SHA256SUMS.txt") -Encoding utf8
           $bundlePath = Join-Path $env:RUNNER_TEMP "rockchip-ssh-sftp-$version-bundle.zip"
           $bundleSource = Join-Path $env:RUNNER_TEMP "rockchip-ssh-sftp-$version-bundle"
+          if (Test-Path $bundleSource) { Remove-Item $bundleSource -Recurse -Force }
           New-Item -ItemType Directory -Force $bundleSource | Out-Null
           Copy-Item (Join-Path $releaseDir '*') $bundleSource -Force
           Compress-Archive -Path (Join-Path $bundleSource '*') -DestinationPath $bundlePath -Force
-          "path=$apkPath" >> $env:GITHUB_OUTPUT
-          "name=$apkName" >> $env:GITHUB_OUTPUT
-          "release_dir=$releaseDir" >> $env:GITHUB_OUTPUT
-          "bundle=$bundlePath" >> $env:GITHUB_OUTPUT
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "path=$apkPath" -Encoding utf8
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "name=$apkName" -Encoding utf8
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "release_dir=$releaseDir" -Encoding utf8
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "bundle=$bundlePath" -Encoding utf8
 
       - name: Upload CI artifact
         uses: actions/upload-artifact@v4
