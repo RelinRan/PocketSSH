@@ -15,10 +15,12 @@ import org.apache.sshd.server.command.Command
 import org.apache.sshd.server.Environment as SshEnvironment
 import java.io.Closeable
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 
 class SshServerManager(
     private val keyDirectory: Path,
     private val commandResolvers: AndroidCommandResolvers? = null,
+    private val rootAccess: Boolean = false,
 ) : Closeable {
     private var server: SshServer? = null
 
@@ -53,7 +55,11 @@ class SshServerManager(
                 })
                 .build()
             subsystemFactories = listOf(LoggingSftpSubsystemFactory(
-                SftpPathAliasAccessor(sharedStoragePath(), keyDirectory.resolve("sftp-shadow"))
+                SftpPathAliasAccessor(
+                    sharedStorage = sharedStoragePath(),
+                    shadowRoot = keyDirectory.resolve("sftp-shadow"),
+                    rootAccess = rootAccess,
+                )
             ))
         }
         try {
@@ -87,6 +93,25 @@ class SshServerManager(
         }
 
         internal fun sharedStoragePath(): Path = Environment.getExternalStorageDirectory().toPath()
+
+        fun detectRootAccess(timeoutMs: Long = 2000L): Boolean {
+            val process = runCatching {
+                ProcessBuilder("su", "0", "id")
+                    .redirectErrorStream(true)
+                    .start()
+            }.getOrNull() ?: return false
+            return try {
+                if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+                    process.destroyForcibly()
+                    false
+                } else {
+                    val output = process.inputStream.bufferedReader().use { it.readText() }
+                    process.exitValue() == 0 && output.contains("uid=0")
+                }
+            } finally {
+                process.destroy()
+            }
+        }
     }
 }
 

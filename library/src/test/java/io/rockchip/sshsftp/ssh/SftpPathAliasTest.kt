@@ -21,6 +21,26 @@ class SftpPathAliasTest {
     }
 
     @Test
+    fun resolvesRootedSftpPathsToTheRealFilesystemRoot() {
+        assertEquals(Paths.get("/"), resolveRemoteSftpPath(Paths.get("/"), "/", shared, shadow, rootAccess = true))
+        assertEquals(
+            Paths.get("/data/local/tmp"),
+            resolveRemoteSftpPath(Paths.get("/"), "/data/local/tmp", shared, shadow, rootAccess = true)
+        )
+        assertEquals(
+            Paths.get("/storage/emulated/0/Android"),
+            resolveRemoteSftpPath(Paths.get("/"), "/storage/emulated/0/Android", shared, shadow, rootAccess = true)
+        )
+    }
+
+    @Test
+    fun doesNotDenyAndroidDirectoryWhenRooted() {
+        assertFalse(isDeniedSftpPath("/storage/emulated/0/Android", rootAccess = true))
+        assertFalse(isDeniedSftpPath("/storage/emulated/0/Android/data", rootAccess = true))
+        assertFalse(isDeniedSftpPath("/data", rootAccess = true))
+    }
+
+    @Test
     fun deniesProtectedAndroidDirectoriesInsteadOfOpeningEmptyShadowFolders() {
         assertTrue(isDeniedSftpPath("/data"))
         assertTrue(isDeniedSftpPath("/data/system"))

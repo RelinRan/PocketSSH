@@ -43,6 +43,7 @@ internal fun resolveRemoteSftpPath(
     remotePath: String,
     sharedStorage: Path,
     shadowRoot: Path? = null,
+    rootAccess: Boolean = false,
 ): Path {
     val normalizedRemote = remotePath.replace('\\', '/')
     val remote = if (normalizedRemote.startsWith('/')) normalizedRemote else "/$normalizedRemote"
@@ -54,8 +55,21 @@ internal fun resolveRemoteSftpPath(
                 parts.add(segment)
             }
             parts
-        }
+    }
     val normalizedLogical = "/" + normalizedSegments.joinToString("/")
+    if (rootAccess) {
+        if (normalizedLogical == "/") return Paths.get("/").normalize()
+        if (remote == "/sdcard" || remote.startsWith("/sdcard/")) {
+            return sharedStorage.resolve(remote.removePrefix("/sdcard").removePrefix("/")).normalize()
+        }
+        if (remote == "/storage/emulated/0" || remote.startsWith("/storage/emulated/0/")) {
+            return Paths.get(remote).normalize()
+        }
+        if (remote == "/storage/self/primary" || remote.startsWith("/storage/self/primary/")) {
+            return sharedStorage.resolve(remote.removePrefix("/storage/self/primary").removePrefix("/")).normalize()
+        }
+        return Paths.get(normalizedLogical).normalize()
+    }
     if (normalizedLogical == "/") return sharedStorage.normalize()
     val shadowPrefix = shadowRoot?.normalize()?.toString()?.replace('\\', '/')
     if (shadowPrefix != null && remote.startsWith(shadowPrefix)) {
@@ -155,7 +169,8 @@ internal fun rootBackedRemotePath(remote: String): String? {
     }
 }
 
-internal fun isDeniedSftpPath(remotePath: String): Boolean {
+internal fun isDeniedSftpPath(remotePath: String, rootAccess: Boolean = false): Boolean {
+    if (rootAccess) return false
     val raw = remotePath.replace('\\', '/').let { if (it.startsWith('/')) it else "/$it" }
     val path = raw.trimEnd('/').ifEmpty { "/" }
     val canonical = when {
@@ -180,6 +195,7 @@ internal fun resolveRootBackedSftpPath(path: Path, shadowRoot: Path): String? {
 internal class SftpPathAliasAccessor(
     private val sharedStorage: Path,
     private val shadowRoot: Path,
+    private val rootAccess: Boolean = false,
 ) : SftpFileSystemAccessor {
     private val rootFiles = ConcurrentHashMap<Path, RootFileTransfer>()
     private val tag = "rockchip-ssh-sftp-SFTP"
@@ -193,11 +209,11 @@ internal class SftpPathAliasAccessor(
         rootDir: Path,
         remotePath: String,
     ): Path {
-        if (isDeniedSftpPath(remotePath)) {
+        if (isDeniedSftpPath(remotePath, rootAccess)) {
             Log.w(tag, "deny protected SFTP path remote=$remotePath")
             throw AccessDeniedException(remotePath, null, "Protected Android directory")
         }
-        val resolved = resolveRemoteSftpPath(rootDir, remotePath, sharedStorage, shadowRoot)
+        val resolved = resolveRemoteSftpPath(rootDir, remotePath, sharedStorage, shadowRoot, rootAccess)
         Log.i(tag, "resolveLocalFilePath remote=$remotePath -> ${resolved}")
         return resolved
     }

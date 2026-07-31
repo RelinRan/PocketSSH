@@ -54,9 +54,12 @@ class SshServerService : Service() {
                 stopSelf(startId)
                 return START_NOT_STICKY
             }
+            val rootAccess = SshServerManager.detectRootAccess()
+            Log.i(TAG, "SSH root access available=$rootAccess")
             manager = SshServerManager(
                 keyDirectory = File(storage.filesDir, "ssh").toPath(),
                 commandResolvers = AndroidCommandResolvers(this),
+                rootAccess = rootAccess,
             ).also { it.start(config) }
             Log.i(TAG, "SSH server listening on ${config.bindAddress}:${config.port}")
             publishState(SshState.RUNNING)
