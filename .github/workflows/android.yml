@@ -1,4 +1,4 @@
-name: Android CI and Release
+﻿name: Android CI and Release
 
 on:
   push:
@@ -32,7 +32,7 @@ jobs:
       - name: Run unit tests
         shell: pwsh
         run: |
-          .\gradlew.bat --no-daemon --stacktrace :app:testDebugUnitTest 2>&1 | Tee-Object -FilePath gradle-test-output.log
+          .\gradlew.bat --no-daemon --stacktrace :library:testDebugUnitTest :app:testDebugUnitTest 2>&1 | Tee-Object -FilePath gradle-test-output.log
           exit $LASTEXITCODE
 
       - name: Summarize unit test failure
@@ -88,40 +88,60 @@ jobs:
             app/build/test-results/testDebugUnitTest/
           if-no-files-found: ignore
 
-      - name: Build installable APK
-        run: .\gradlew.bat --no-daemon :app:assembleDebug
+      - name: Build release artifacts
+        run: .\gradlew.bat --no-daemon :app:assembleRelease :library:fatReleaseAar :library:fatReleaseJar
 
-      - name: Locate APK
+      - name: Package release artifacts
         id: apk
         shell: pwsh
         run: |
-          $gradle = Get-Content app/build.gradle.kts -Raw
-          $versionName = [regex]::Match($gradle, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
-          $versionCode = [int][regex]::Match($gradle, 'versionCode\s*=\s*(\d+)').Groups[1].Value
+          $properties = Get-Content gradle.properties -Raw
+          $versionName = [regex]::Match($properties, '(?m)^project\.versionName=(.+)$').Groups[1].Value.Trim()
+          $versionCode = [int][regex]::Match($properties, '(?m)^project\.versionCode=(\d+)$').Groups[1].Value
           if (-not $versionName -or $versionCode -le 0) {
-            throw "Unable to read application version from app/build.gradle.kts"
+            throw "Unable to read application version from gradle.properties"
           }
           $version = "v$versionName.$($versionCode.ToString('0000'))"
-          $apkName = "PocketSSH-$version.apk"
-          $sourceApk = Get-ChildItem app/build/outputs/apk/debug -Recurse -Filter *.apk | Select-Object -First 1
-          if (-not $sourceApk) {
-            throw "Generated APK was not found"
+          $apkName = "rockchip-ssh-sftp-$version.apk"
+          $libraryAarName = "rockchip-ssh-sftp-library-$version.aar"
+          $libraryJarName = "rockchip-ssh-sftp-library-$version-all.jar"
+          $sourceApk = Get-ChildItem app/build/outputs/apk/release -Recurse -Filter *.apk | Select-Object -First 1
+          $sourceAar = Get-Item "library/build/outputs/aar/$libraryAarName" -ErrorAction SilentlyContinue
+          $sourceJar = Get-Item "library/build/outputs/jar/$libraryJarName" -ErrorAction SilentlyContinue
+          if (-not $sourceApk -or -not $sourceAar -or -not $sourceJar) {
+            throw "One or more release artifacts were not generated"
           }
           if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $version) {
             throw "Tag $($env:GITHUB_REF_NAME) does not match application version $version"
           }
-          $releaseDir = Join-Path $env:RUNNER_TEMP "pocketssh-release"
+          $releaseDir = Join-Path $env:RUNNER_TEMP "rockchip-ssh-sftp-release"
           New-Item -ItemType Directory -Force $releaseDir | Out-Null
           $apkPath = Join-Path $releaseDir $apkName
+          $aarPath = Join-Path $releaseDir $libraryAarName
+          $jarPath = Join-Path $releaseDir $libraryJarName
           Copy-Item $sourceApk.FullName $apkPath
+          Copy-Item $sourceAar.FullName $aarPath
+          Copy-Item $sourceJar.FullName $jarPath
+          $checksums = @($apkPath, $aarPath, $jarPath) | ForEach-Object {
+            $hash = Get-FileHash $_ -Algorithm SHA256
+            "$($hash.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_))"
+          }
+          $checksums | Set-Content (Join-Path $releaseDir "SHA256SUMS.txt")
+          $bundlePath = Join-Path $env:RUNNER_TEMP "rockchip-ssh-sftp-$version-bundle.zip"
+          $bundleSource = Join-Path $env:RUNNER_TEMP "rockchip-ssh-sftp-$version-bundle"
+          New-Item -ItemType Directory -Force $bundleSource | Out-Null
+          Copy-Item (Join-Path $releaseDir '*') $bundleSource -Force
+          Compress-Archive -Path (Join-Path $bundleSource '*') -DestinationPath $bundlePath -Force
           "path=$apkPath" >> $env:GITHUB_OUTPUT
           "name=$apkName" >> $env:GITHUB_OUTPUT
+          "release_dir=$releaseDir" >> $env:GITHUB_OUTPUT
+          "bundle=$bundlePath" >> $env:GITHUB_OUTPUT
 
       - name: Upload CI artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.apk.outputs.name }}
-          path: ${{ steps.apk.outputs.path }}
+          path: ${{ steps.apk.outputs.release_dir }}
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -129,4 +149,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: ${{ steps.apk.outputs.path }}
+          files: |
+            ${{ steps.apk.outputs.release_dir }}/*.apk
+            ${{ steps.apk.outputs.release_dir }}/*.aar
+            ${{ steps.apk.outputs.release_dir }}/*.jar
+            ${{ steps.apk.outputs.release_dir }}/SHA256SUMS.txt
+            ${{ steps.apk.outputs.bundle }}

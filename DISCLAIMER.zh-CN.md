@@ -2,7 +2,7 @@
 
 中文 | [English](DISCLAIMER.md)
 
-PocketSSH 是用于 Android 设备本地调试、维护、文件传输和自动化验证的工具。使用本项目即表示你理解并同意以下免责声明。
+rockchip-ssh-sftp 是用于 Android 设备本地调试、维护、文件传输和自动化验证的工具。使用本项目即表示你理解并同意以下免责声明。
 
 ## 1. 按现状提供
 
@@ -24,7 +24,7 @@ PocketSSH 是用于 Android 设备本地调试、维护、文件传输和自动�
 
 ## 3. 安全责任
 
-PocketSSH 会在 Android 设备上开启 SSH 服务。使用者应自行负责账号、密码、端口、网络访问范围和设备安全策略。
+rockchip-ssh-sftp 会在 Android 设备上开启 SSH 服务。使用者应自行负责账号、密码、端口、网络访问范围和设备安全策略。
 
 强烈建议：
 

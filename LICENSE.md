@@ -1,8 +1,8 @@
-# MIT License
+﻿# MIT License
 
-[中文说明](LICENSE.zh-CN.md) | English
+[涓枃璇存槑](LICENSE.zh-CN.md) | English
 
-Copyright (c) 2026 PocketSSH contributors
+Copyright (c) 2026 rockchip-ssh-sftp contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

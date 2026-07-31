@@ -2,7 +2,7 @@
 
 [中文](DISCLAIMER.zh-CN.md) | English
 
-PocketSSH is a tool for local debugging, maintenance, file transfer, and automation verification on Android devices. By using this project, you understand and agree to the following disclaimer.
+rockchip-ssh-sftp is a tool for local debugging, maintenance, file transfer, and automation verification on Android devices. By using this project, you understand and agree to the following disclaimer.
 
 ## 1. Provided As Is
 
@@ -24,7 +24,7 @@ Users assume all risks arising from the use of this project, including but not l
 
 ## 3. Security Responsibility
 
-PocketSSH starts an SSH service on an Android device. Users are responsible for the username, password, port, network access scope, and device security policy.
+rockchip-ssh-sftp starts an SSH service on an Android device. Users are responsible for the username, password, port, network access scope, and device security policy.
 
 Strong recommendations:
 
