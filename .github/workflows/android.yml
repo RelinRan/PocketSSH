@@ -1,4 +1,4 @@
-name: Android CI and Release
+﻿name: Android CI and Release
 
 on:
   push:
@@ -102,7 +102,7 @@ jobs:
             throw "Unable to read application version from app/build.gradle.kts"
           }
           $version = "v$versionName.$($versionCode.ToString('0000'))"
-          $apkName = "PocketSSH-$version.apk"
+          $apkName = "rockchip-ssh-sftp-$version.apk"
           $sourceApk = Get-ChildItem app/build/outputs/apk/debug -Recurse -Filter *.apk | Select-Object -First 1
           if (-not $sourceApk) {
             throw "Generated APK was not found"
@@ -110,7 +110,7 @@ jobs:
           if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $version) {
             throw "Tag $($env:GITHUB_REF_NAME) does not match application version $version"
           }
-          $releaseDir = Join-Path $env:RUNNER_TEMP "pocketssh-release"
+          $releaseDir = Join-Path $env:RUNNER_TEMP "rockchip-ssh-sftp-release"
           New-Item -ItemType Directory -Force $releaseDir | Out-Null
           $apkPath = Join-Path $releaseDir $apkName
           Copy-Item $sourceApk.FullName $apkPath

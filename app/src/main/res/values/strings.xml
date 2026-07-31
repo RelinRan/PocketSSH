@@ -1,5 +1,5 @@
-<resources>
-    <string name="app_name">PSSH</string>
+﻿<resources>
+    <string name="app_name">rockchip-ssh-sftp</string>
     <string name="app_tagline">Local Node / Secure Access</string>
     <string name="ssh_version_label">SSH // 2.12</string>
     <string name="node_status_label">Node Status</string>
@@ -19,6 +19,6 @@
     <string name="error_password_required">Password is required</string>
     <string name="error_port_range">Port must be 1 to 65535</string>
     <string name="ssh_notification_channel">SSH Server</string>
-    <string name="ssh_notification_title">PocketSSH Local SSH Service</string>
+    <string name="ssh_notification_title">rockchip-ssh-sftp Local SSH Service</string>
     <string name="ssh_notification_text">SSH service is running</string>
 </resources>

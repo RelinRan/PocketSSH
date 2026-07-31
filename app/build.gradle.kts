@@ -6,11 +6,11 @@ plugins {
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 
 android {
-    namespace = "io.pocketssh.server"
+    namespace = "io.rockchip.sshsftp"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.pocketssh.server"
+        applicationId = "io.rockchip.sshsftp"
         minSdk = 24
         targetSdk = 35
         versionCode = 3
@@ -56,7 +56,7 @@ android {
         outputs.all {
             val output = this as BaseVariantOutputImpl
             val code = versionCode.toString().padStart(4, '0')
-            output.outputFileName = "PocketSSH-v$versionName.$code.apk"
+            output.outputFileName = "rockchip-ssh-sftp-v$versionName.$code.apk"
         }
     }
 }
@@ -64,18 +64,11 @@ android {
 dependencies {
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation(project(":library"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation(files("libs/sshd-common-2.12.1.jar"))
-    implementation(files("libs/sshd-core-2.12.1.jar"))
-    implementation(files("libs/sshd-scp-2.12.1.jar"))
-    implementation(files("libs/sshd-sftp-2.12.1.jar"))
-    implementation(files("libs/slf4j-api-1.7.32.jar"))
-    implementation("org.slf4j:slf4j-android:1.7.36") {
-        exclude(group = "org.slf4j", module = "slf4j-api")
-    }
 }

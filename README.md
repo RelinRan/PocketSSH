@@ -1,12 +1,12 @@
-﻿# PocketSSH
+﻿# rockchip-ssh-sftp
 
 [中文](README.zh-CN.md) | English
 
-PocketSSH is a lightweight SSH server that runs locally on Android devices. It is designed for LAN device maintenance, debugging, file transfer, and automation control. The app provides a foreground SSH service, a deep-blue dark-tech configuration page, boot auto-start support, and standard SSH/SFTP/SCP compatibility for common desktop clients.
+rockchip-ssh-sftp is a lightweight SSH server that runs locally on Android devices. It is designed for LAN device maintenance, debugging, file transfer, and automation control. The app provides a foreground SSH service, a deep-blue dark-tech configuration page, boot auto-start support, and standard SSH/SFTP/SCP compatibility for common desktop clients.
 
 The project is currently developed and tested primarily for SSH remote access on Rockchip-based Android development boards. Compatibility on phones, tablets, other chipsets, and vendor-customized Android systems may vary.
 
-PocketSSH is fully open source under the permissive MIT License. Personal use, commercial use, modification, redistribution, and integration into other products are allowed subject to the license notice requirements.
+rockchip-ssh-sftp is fully open source under the permissive MIT License. Personal use, commercial use, modification, redistribution, and integration into other products are allowed subject to the license notice requirements.
 
 ## Highlights
 
@@ -41,7 +41,7 @@ Notification text is also localized through Android resources and follows the sy
 
 ## Quick Start
 
-1. Install and open PocketSSH.
+1. Install and open rockchip-ssh-sftp.
 2. Configure `Username`, `Password`, and `Port`.
 3. Tap `SAVE AND APPLY` to save settings and restart the service automatically.
 4. Tap `START SERVICE` if the service is not already running.
@@ -114,13 +114,13 @@ On Windows:
 The debug APK is generated with a versioned file name:
 
 ```text
-app/build/outputs/apk/debug/PocketSSH-v1.0.0002.apk
+app/build/outputs/apk/debug/rockchip-ssh-sftp-v1.0.0002.apk
 ```
 
 The naming format is:
 
 ```text
-PocketSSH-v{versionName}.{versionCode padded to 4 digits}.apk
+rockchip-ssh-sftp-v{versionName}.{versionCode padded to 4 digits}.apk
 ```
 
 ## GitHub Releases
@@ -132,7 +132,7 @@ git tag v1.0.0002
 git push origin v1.0.0002
 ```
 
-GitHub Actions runs the unit tests, builds an installable APK, creates the release, and attaches `PocketSSH-v1.0.0002.apk`. Update `versionName` and `versionCode` in `app/build.gradle.kts` before creating each new tag.
+GitHub Actions runs the unit tests, builds an installable APK, creates the release, and attaches `rockchip-ssh-sftp-v1.0.0002.apk`. Update `versionName` and `versionCode` in `app/build.gradle.kts` before creating each new tag.
 
 ## Documentation
 
@@ -151,18 +151,18 @@ Project documentation follows a simple internationalized file layout:
 
 ## Important Notes
 
-- PocketSSH is not a system root shell. Commands run with the app's own permissions by default.
+- rockchip-ssh-sftp is not a system root shell. Commands run with the app's own permissions by default.
 - On a non-rooted device, some commands and protected paths cannot be accessed because the app does not have the required system privileges. This is an Android security restriction, not an SSH authentication issue.
 - Runtime behavior is limited by the Android app sandbox, file access rules, SELinux, system permissions, and device root state.
 - Commands requiring system-level privileges may need root or system signature permissions. Without those permissions, commands may return a clear failure message.
 - SFTP access is still limited by Android's actual file permissions.
-- On Android 11 and newer, grant PSSH the system All files access permission to browse shared storage. `Android/data`, `Android/obb`, and system `/data` may remain restricted by Android, SELinux, vendor policy, or root state.
+- On Android 11 and newer, grant rockchip-ssh-sftp the system All files access permission to browse shared storage. `Android/data`, `Android/obb`, and system `/data` may remain restricted by Android, SELinux, vendor policy, or root state.
 - Do not expose a weak-password SSH service directly to the public internet.
 - For commercial or batch deployment, perform security assessment, permission auditing, and password policy planning first.
 - The primary test environment is Rockchip-based Android development boards used for SSH remote maintenance. Test the required commands on the target hardware and Android build before deployment.
 
 ## License
 
-PocketSSH is open-source software released under the [MIT License](LICENSE.md). It may be used, modified, distributed, sublicensed, and used commercially without separate authorization, provided that the copyright and license notices are retained.
+rockchip-ssh-sftp is open-source software released under the [MIT License](LICENSE.md). It may be used, modified, distributed, sublicensed, and used commercially without separate authorization, provided that the copyright and license notices are retained.
 
 See [LICENSE.md](LICENSE.md). Please also read [DISCLAIMER.md](DISCLAIMER.md) before use.

@@ -1,4 +1,4 @@
-pluginManagement {
+﻿pluginManagement {
     repositories {
         google {
             content {
@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PocketSSH"
+rootProject.name = "rockchip-ssh-sftp"
+include(":library")
 include(":app")
- 
