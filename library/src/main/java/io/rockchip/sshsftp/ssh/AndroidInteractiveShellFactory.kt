@@ -30,10 +30,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * download https://xxxx xxx.apk
  *
- * #拉取设备文件到本�?
+ * #???????????????????????????
  * scp -O -P 2222 -r BSD874EF28FA48@192.168.15.109:/sdcard/HandHygiene/db E:\db
  *
- * #拷贝本地文件到设�?
+ * #???????????????????????????
  * scp -O -P 2222 -r E:\novel.zip BSD874EF28FA48@192.168.15.109:/sdcard/
  */
 class AndroidInteractiveShellFactory(
@@ -333,10 +333,10 @@ class AndroidInteractiveShellFactory(
         private fun handleBuiltinCommand(line: String, reader: LineReader): Boolean {
             val args = splitArgs(line)
             if (args.isEmpty()) return true
-            if (rootAccess && args[0] in ROOT_SYSTEM_FILE_COMMANDS) return false
+            if (rootAccess && args[0] in (ROOT_SYSTEM_FILE_COMMANDS - "ls")) return false
             when (args[0]) {
                 "ls" -> {
-                    listFiles(args.drop(1))
+                    if (rootAccess) listRootFiles(args.drop(1)) else listFiles(args.drop(1))
                     return true
                 }
                 "cat" -> {
@@ -696,6 +696,110 @@ class AndroidInteractiveShellFactory(
 
         private fun readInputByte(source: InputStream): Int =
             if (pendingInput.isEmpty()) source.read() else pendingInput.removeFirst()
+
+        private fun listRootFiles(args: List<String>) {
+            val showAll = args.any { option -> option.startsWith("-") && option.contains("a") }
+            val longFormat = args.any { option -> option.startsWith("-") && option.contains("l") }
+            val target = resolvePath(args.firstOrNull { !it.startsWith("-") } ?: ".")
+            if (longFormat) {
+                val flags = if (showAll) "-la" else "-l"
+                val metadata = executeFirstText(rootShellCommands("ls $flags ${shellEscape(target.absolutePath)}"))
+                if (metadata == null) {
+                    write("ls: ${target.path}: Permission denied\r\n")
+                    return
+                }
+                writeRootLongFileList(parseRootLsLongEntries(metadata).sortedBy { it.name })
+                return
+            }
+            val flags = if (showAll) "-a1F" else "-A1F"
+            val result = executeFirstText(rootShellCommands("ls $flags ${shellEscape(target.absolutePath)}"))
+            if (result == null) {
+                write("ls: ${target.path}: Permission denied\r\n")
+                return
+            }
+            val entries = result.lineSequence()
+                .map { it.trimEnd('\r') }
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val type = when {
+                        line.endsWith("/") -> RootLsEntry.Type.DIRECTORY
+                        line.endsWith("*") -> RootLsEntry.Type.EXECUTABLE
+                        line.endsWith("@") -> RootLsEntry.Type.SYMLINK
+                        else -> RootLsEntry.Type.FILE
+                    }
+                    RootLsEntry(type = type, permissions = "----------", size = 0L, modifiedEpochSeconds = 0L, name = line.dropLastWhile { it in "/*@" })
+                }
+                .sortedBy { it.name }
+                .toList()
+            writeColumns(entries.map(::coloredRootFileName))
+        }
+        private fun rootLsCommand(target: File, showAll: Boolean): String {
+            val escaped = shellEscape(target.absolutePath)
+            val patterns = if (showAll) {
+                "\"${'$'}target\"/* \"${'$'}target\"/.[!.]* \"${'$'}target\"/..?*"
+            } else {
+                "\"${'$'}target\"/*"
+            }
+            return """
+                target=$escaped
+                if [ -d "${'$'}target" ]; then
+                    for child in $patterns; do
+                        [ -e "${'$'}child" ] || [ -L "${'$'}child" ] || continue
+                        name=${'$'}{child##*/}
+                        if [ -L "${'$'}child" ]; then type=l
+                        elif [ -d "${'$'}child" ]; then type=d
+                        elif [ -x "${'$'}child" ]; then type=x
+                        else type=f
+                        fi
+                        if [ "${'$'}type" = l ]; then name="${'$'}name -> ${'$'}(/system/bin/readlink \"${'$'}child\")"; fi
+                        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${'$'}type" "${'$'}(/system/bin/stat -c %A \"${'$'}child\")" "${'$'}(/system/bin/stat -c %h \"${'$'}child\")" "${'$'}(/system/bin/stat -c %U \"${'$'}child\")" "${'$'}(/system/bin/stat -c %G \"${'$'}child\")" "${'$'}(/system/bin/stat -c %s \"${'$'}child\")" "${'$'}(/system/bin/stat -c %Y \"${'$'}child\")" "${'$'}(/system/bin/stat -c %b \"${'$'}child\")" "${'$'}name"
+                    done
+                else
+                    name=${'$'}{target##*/}
+                    if [ -L "${'$'}target" ]; then type=l
+                    elif [ -d "${'$'}target" ]; then type=d
+                    elif [ -x "${'$'}target" ]; then type=x
+                    else type=f
+                    fi
+                    if [ "${'$'}type" = l ]; then name="${'$'}name -> ${'$'}(/system/bin/readlink \"${'$'}target\")"; fi
+                    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${'$'}type" "${'$'}(/system/bin/stat -c %A \"${'$'}target\")" "${'$'}(/system/bin/stat -c %h \"${'$'}target\")" "${'$'}(/system/bin/stat -c %U \"${'$'}target\")" "${'$'}(/system/bin/stat -c %G \"${'$'}target\")" "${'$'}(/system/bin/stat -c %s \"${'$'}target\")" "${'$'}(/system/bin/stat -c %Y \"${'$'}target\")" "${'$'}(/system/bin/stat -c %b \"${'$'}target\")" "${'$'}name"
+                fi
+            """.trimIndent()
+        }
+
+        private fun writeRootLongFileList(entries: List<RootLsEntry>) {
+            val total = entries.sumOf { it.blocks } / 2L
+            write("total $total\r\n")
+            entries.forEach { entry ->
+                val modified = SimpleDateFormat("MMM dd HH:mm", Locale.US)
+                    .format(Date(entry.modifiedEpochSeconds * 1000L))
+                write(
+                    String.format(
+                        Locale.US,
+                        "%s %3d %-8s %-8s %8s %s %s\r\n",
+                        colorPermissions(entry.permissions),
+                        entry.links,
+                        entry.owner,
+                        entry.group,
+                        colorSize(entry.size.toString()),
+                        colorMuted(modified),
+                        coloredRootFileName(entry),
+                    )
+                )
+            }
+        }
+
+        private fun coloredRootFileName(entry: RootLsEntry): String {
+            val name = entry.name
+
+            return when {
+                entry.name.startsWith(".") -> colorHidden(name)
+                entry.type == RootLsEntry.Type.DIRECTORY -> colorDirectory(name)
+                entry.type == RootLsEntry.Type.SYMLINK -> color( name, ANSI_CYAN)
+                entry.type == RootLsEntry.Type.EXECUTABLE -> colorExecutable(name)
+                else -> colorFile(name)
+            }
+        }
 
         private fun listFiles(args: List<String>) {
             val showAll = args.any { option -> option.startsWith("-") && option.contains("a") }

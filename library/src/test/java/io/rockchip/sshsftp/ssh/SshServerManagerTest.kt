@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
+import java.nio.file.Paths
 
 class SshServerManagerTest {
     @Test
@@ -26,6 +27,15 @@ class SshServerManagerTest {
             listOf("/system/bin/sh", "-c", "ls /data"),
             SshServerManager.execCommandLine("ls /data", rootAccess = false),
         )
+    }
+
+    @Test
+    fun `server startup avoids Path of which is unavailable on older Android runtimes`() {
+        val source = String(
+            Files.readAllBytes(Paths.get("src/main/java/io/rockchip/sshsftp/ssh/SshServerManager.kt")),
+        )
+
+        assertFalse(source.contains("Path.of("))
     }
 
     @Test

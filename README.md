@@ -2,9 +2,9 @@
 
 [中文](README.zh-CN.md) | English
 
-rockchip-ssh-sftp is a lightweight SSH server that runs locally on Android devices. It is designed for LAN device maintenance, debugging, file transfer, and automation control. The app provides a foreground SSH service, a deep-blue dark-tech configuration page, boot auto-start support, and standard SSH/SFTP/SCP compatibility for common desktop clients.
+rockchip-ssh-sftp is a lightweight SSH/SFTP/SCP server for rooted Rockchip Android development boards. It is designed for LAN device maintenance, debugging, file transfer, and automation control. The app provides a foreground SSH service, boot auto-start support, and standard client compatibility.
 
-The project is currently developed and tested primarily for SSH remote access on Rockchip-based Android development boards. Compatibility on phones, tablets, other chipsets, and vendor-customized Android systems may vary.
+The primary target is a Rockchip board with working `su 0` root access. Root mode enables full filesystem navigation, including `/data` and `/storage/emulated/0/Android`. Non-root Android devices remain supported for ordinary app-accessible paths, but Android-protected paths may return permission denied. Phones, tablets, other chipsets, and vendor-customized systems are outside the primary compatibility target.
 
 rockchip-ssh-sftp is fully open source under the permissive MIT License. Personal use, commercial use, modification, redistribution, and integration into other products are allowed subject to the license notice requirements.
 
@@ -16,7 +16,8 @@ rockchip-ssh-sftp is fully open source under the permissive MIT License. Persona
 - Automatically restarts the SSH service after saving configuration, so new settings take effect immediately.
 - Foreground service with boot auto-start support.
 - Supports SSH interactive shell, remote exec, SCP, and SFTP.
-- SSH shell and SFTP sessions start in shared storage (`/storage/emulated/0`) by default, so `ls` and the initial file list show sdcard contents immediately.
+- Rooted boards start SSH shell and SFTP sessions at `/`; non-root sessions start at `/storage/emulated/0`.
+- Rooted boards support `/data` and `/storage/emulated/0/Android`; `/storage` and `/sdcard` enter shared storage and return to `/` at their parent boundary.
 - Android 11 and newer are guided to grant All files access; the SSH service restarts after the permission is granted.
 - SFTP path aliases for common Android storage paths:
   - `/sdcard`
@@ -87,34 +88,43 @@ Some OpenSSH clients may require legacy SCP mode:
 scp -O -P 2222 ./local.txt android@<device-ip>:/sdcard/Download/local.txt
 ```
 
-On connection, SFTP `/` represents the device shared-storage root. These paths are equivalent:
+On a rooted board, SFTP `/` represents the Android filesystem root. `/storage` and `/sdcard` enter shared storage and report `/storage/emulated/0`:
 
 ```text
 /
-/sdcard
-/storage/emulated/0
+/data
+/storage/emulated/0/Android
 ```
 
-Parent navigation from `/` remains at the shared-storage root and does not enter the protected Android system root.
+Parent navigation from `/` remains at `/`. Parent navigation from `/storage/emulated/0` returns to `/` when reached through `/storage` or `/sdcard`.
 
 ## Build
 
 On macOS or Linux:
 
 ```bash
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease :library:fatReleaseAar :library:fatReleaseJar
 ```
 
 On Windows:
 
 ```powershell
-.\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:assembleRelease :library:fatReleaseAar :library:fatReleaseJar
 ```
 
-The debug APK is generated with a versioned file name:
+Release artifacts are generated with versioned file names:
 
 ```text
-app/build/outputs/apk/debug/rockchip-ssh-sftp-v1.0.0002.apk
+app/build/outputs/apk/release/rockchip-ssh-sftp-v1.1.0004.apk
+
+The library artifacts are:
+
+```text
+library/build/outputs/aar/rockchip-ssh-sftp-library-v1.1.0004.aar
+library/build/outputs/jar/rockchip-ssh-sftp-library-v1.1.0004-all.jar
+```
+
+The fat AAR and fat JAR include the library classes and Apache MINA SSHD runtime dependencies. GitHub Releases also contain a bundle ZIP and `SHA256SUMS.txt`.
 ```
 
 The naming format is:
@@ -128,11 +138,11 @@ rockchip-ssh-sftp-v{versionName}.{versionCode padded to 4 digits}.apk
 Push a version tag matching the generated APK version to publish a GitHub Release automatically:
 
 ```bash
-git tag v1.0.0002
-git push origin v1.0.0002
+git tag v1.1.0004
+git push origin v1.1.0004
 ```
 
-GitHub Actions runs the unit tests, builds an installable APK, creates the release, and attaches `rockchip-ssh-sftp-v1.0.0002.apk`. Update `versionName` and `versionCode` in `app/build.gradle.kts` before creating each new tag.
+GitHub Actions runs library and app unit tests, builds the release APK, creates the fat AAR and fat JAR, generates checksums, packages a bundle ZIP, and attaches all artifacts. Update `project.versionName` and `project.versionCode` in `gradle.properties` before creating each new tag.
 
 ## Documentation
 

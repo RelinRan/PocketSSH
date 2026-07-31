@@ -21,20 +21,34 @@ class SftpPathAliasTest {
     }
 
     @Test
-    fun resolvesRootedSftpPathsToTheRealFilesystemRoot() {
+    fun resolvesRootedSftpRootToTheRealFilesystemRoot() {
         assertEquals(Paths.get("/"), resolveRemoteSftpPath(Paths.get("/"), "/", shared, shadow, rootAccess = true))
+    }
+
+    @Test
+    fun rootedSftpUsesShadowPathsForDirectoriesThatRequireRootBackedOperations() {
         assertEquals(
-            Paths.get("/data/local/tmp"),
-            resolveRemoteSftpPath(Paths.get("/"), "/data/local/tmp", shared, shadow, rootAccess = true)
+            shadow.resolve("root/data/local/tmp"),
+            resolveRemoteSftpPath(Paths.get("/"), "/data/local/tmp", shared, shadow, rootAccess = true),
         )
         assertEquals(
-            Paths.get("/storage/emulated/0/Android"),
-            resolveRemoteSftpPath(Paths.get("/"), "/storage/emulated/0/Android", shared, shadow, rootAccess = true)
+            shadow.resolve("root/storage/emulated/0/Android/data"),
+            resolveRemoteSftpPath(
+                Paths.get("/"),
+                "/storage/emulated/0/Android/data",
+                shared,
+                shadow,
+                rootAccess = true,
+            ),
         )
     }
 
     @Test
     fun rootedStorageAliasReturnsToFilesystemRoot() {
+        assertEquals(
+            shared,
+            resolveRemoteSftpPath(Paths.get("/"), "/storage", shared, shadow, rootAccess = true)
+        )
         assertEquals(
             Paths.get("/"),
             resolveRemoteSftpPath(Paths.get("/"), "/storage/emulated/0/..", shared, shadow, rootAccess = true)
@@ -47,6 +61,10 @@ class SftpPathAliasTest {
 
     @Test
     fun shellNavigationUsesTheSameRootBoundaryAsSftp() {
+        assertEquals(
+            shared,
+            resolveShellPath(Paths.get("/"), "/storage", shared, rootAccess = true)
+        )
         assertEquals(Paths.get("/"), resolveShellPath(shared, "..", shared, rootAccess = true))
         assertEquals(shared, resolveShellPath(shared, "..", shared, rootAccess = false))
         assertEquals(
@@ -140,6 +158,21 @@ class SftpPathAliasTest {
     }
 
     @Test
+    fun recognizesRootModeRealPathsForRootBackedOperations() {
+        assertEquals(
+            "/data/system/packages.list",
+            resolveRootBackedSftpPath(Paths.get("/data/system/packages.list"), shadow)
+        )
+        assertEquals(
+            "/storage/emulated/0/Android/data/com.example/files/a.txt",
+            resolveRootBackedSftpPath(
+                Paths.get("/storage/emulated/0/Android/data/com.example/files/a.txt"),
+                shadow,
+            )
+        )
+    }
+
+    @Test
     fun mapsAndroidRootToRootBackedShadowPath() {
         assertEquals(
             shadow.resolve("root/storage/emulated/0/Android"),
@@ -160,11 +193,39 @@ class SftpPathAliasTest {
     }
 
     @Test
+    fun reportsLogicalPathsInsteadOfShadowPaths() {
+        assertEquals(Paths.get("/"), logicalSftpPath(shadow.resolve("root"), shadow))
+        assertEquals(Paths.get("/data"), logicalSftpPath(shadow.resolve("root/data"), shadow))
+        assertEquals(
+            Paths.get("/storage/emulated/0/Android"),
+            logicalSftpPath(shadow.resolve("root/storage/emulated/0/Android"), shadow),
+        )
+        assertEquals(
+            Paths.get("/storage/emulated/0"),
+            logicalSftpPath(shadow.resolve("storage/emulated/0"), shadow),
+        )
+    }
+
+    @Test
     fun doesNotRemapAlreadyShadowResolvedPaths() {
         val alreadyShadow = shadow.resolve("root/data")
         assertEquals(
             alreadyShadow,
             resolveRemoteSftpPath(alreadyShadow, alreadyShadow.toString(), shared, shadow)
+        )
+        assertEquals(
+            alreadyShadow,
+            resolveRemoteSftpPath(alreadyShadow, alreadyShadow.toString(), shared, shadow, rootAccess = true)
+        )
+        assertEquals(
+            alreadyShadow,
+            resolveRemoteSftpPath(
+                alreadyShadow,
+                alreadyShadow.resolve(".").toString(),
+                shared,
+                shadow,
+                rootAccess = true,
+            )
         )
     }
 

@@ -3,6 +3,7 @@
 import org.apache.sshd.server.ExitCallback
 import org.apache.sshd.server.channel.ChannelSession
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -15,6 +16,49 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class AndroidInteractiveShellFactoryTest {
+
+    @Test
+    fun parsesRootLsMetadataForSharedRendering() {
+        val entries = parseRootLsEntries(
+            "d\tdrwxr-xr-x\t0\t1700000000\tdata\n" +
+                "x\t-rwxr-xr-x\t42\t1700000001\ttool\n" +
+                "f\t-rw-r--r--\t7\t1700000002\treadme.txt\n",
+        )
+
+        assertEquals(3, entries.size)
+        assertEquals(RootLsEntry.Type.DIRECTORY, entries[0].type)
+        assertEquals("tool", entries[1].name)
+        assertEquals(7L, entries[2].size)
+
+        val longEntries = parseRootLsLongEntries(
+            "drwxr-xr-x 3 root root 4096 Jan 01 00:00 data\n" +
+                "-rw-r--r-- 1 root root 42 Jan 01 00:00 readme.txt\n",
+        )
+        assertEquals(4096L, longEntries[0].size)
+        assertEquals(42L, longEntries[1].size)
+        assertEquals(3L, longEntries[0].links)
+        assertEquals("root", longEntries[0].owner)
+        assertEquals("root", longEntries[0].group)
+        assertTrue(longEntries[0].modifiedEpochSeconds > 0L)
+        assertEquals("data", longEntries[0].name)
+        assertEquals("readme.txt", longEntries[1].name)
+
+        val androidEntries = parseRootLsLongEntries(
+            "drwxr-xr-x 51 system system 4096 2026-07-31 13:37 data\n",
+        )
+        assertEquals(1, androidEntries.size)
+        assertEquals("data", androidEntries[0].name)
+        assertTrue(androidEntries[0].modifiedEpochSeconds > 0L)
+
+        val structuredEntries = parseRootLsEntries(
+            "d\tdrwxr-xr-x\t3\troot\tsystem\t4096\t1785485000\t8\tdata"
+        )
+        assertEquals(3L, structuredEntries[0].links)
+        assertEquals("root", structuredEntries[0].owner)
+        assertEquals("system", structuredEntries[0].group)
+        assertEquals(1785485000L, structuredEntries[0].modifiedEpochSeconds)
+        assertEquals(8L, structuredEntries[0].blocks)
+    }
 
     @Test
     fun shellStartsInConfiguredSharedStorageDirectory() {

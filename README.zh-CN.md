@@ -2,9 +2,9 @@
 
 中文 | [English](README.md)
 
-rockchip-ssh-sftp 是一个运行在 Android 设备本地的轻量 SSH 服务端项目，面向局域网设备维护、调试、文件传输和自动化控制场景。应用提供前台 SSH 服务、深蓝暗黑科技风配置页面、开机自启动支持，并兼容常见桌面 SSH/SFTP/SCP 客户端。
+rockchip-ssh-sftp 是一个主要面向带 root 权限 Rockchip Android 开发板的 SSH/SFTP/SCP 服务端项目，面向局域网设备维护、调试、文件传输和自动化控制场景。
 
-本项目当前主要面向基于 Rockchip 芯片的 Android 开发板进行 SSH 远程访问开发和测试。手机、平板、其他芯片平台以及厂商定制 Android 系统的兼容性可能存在差异。
+主要目标设备需要能够正常执行 `su 0`。Root 模式支持完整文件系统导航，包括 `/data` 和 `/storage/emulated/0/Android`。非 root 设备仍可访问普通应用可访问目录，但 Android 受保护目录可能返回无权限。手机、平板、其他芯片平台及厂商深度定制系统不属于主要兼容目标。
 
 rockchip-ssh-sftp 采用宽松的 MIT 许可证完全开源，允许个人使用、商业使用、修改、再分发以及集成到其他产品，但须按许可证要求保留版权和许可声明。
 
@@ -16,7 +16,8 @@ rockchip-ssh-sftp 采用宽松的 MIT 许可证完全开源，允许个人使用
 - 保存配置后自动重启 SSH 服务，使新参数立即生效。
 - 支持前台服务和开机自动启动。
 - 支持 SSH interactive shell、远程 exec、SCP 和 SFTP。
-- SSH 命令行和 SFTP 默认从共享存储（`/storage/emulated/0`）启动，连接后直接执行 `ls` 或打开文件列表即可看到 sdcard 内容。
+- Root 设备的 SSH 命令行和 SFTP 从 `/` 启动；非 root 设备从 `/storage/emulated/0` 启动。
+- Root 设备支持 `/data` 和 `/storage/emulated/0/Android`；点击 `/storage` 或 `/sdcard` 进入共享存储，返回上一级回到 `/`。
 - Android 11 及以上系统会引导授予“所有文件访问权限”，授权返回后自动重启 SSH 服务。
 - SFTP 支持常用 Android 存储路径别名：
   - `/sdcard`
@@ -87,34 +88,43 @@ scp -P 2222 ./local.txt android@<device-ip>:/sdcard/Download/local.txt
 scp -O -P 2222 ./local.txt android@<device-ip>:/sdcard/Download/local.txt
 ```
 
-SFTP 连接后的 `/` 表示设备共享存储根目录，以下路径等价：
+Root 设备 SFTP 连接后的 `/` 表示 Android 文件系统根目录；`/storage` 和 `/sdcard` 会进入共享存储并显示为 `/storage/emulated/0`：
 
 ```text
 /
-/sdcard
-/storage/emulated/0
+/data
+/storage/emulated/0/Android
 ```
 
-在 `/` 点击返回上一级仍停留在共享存储根目录，不会进入受保护的 Android 系统根目录。
+在 `/` 返回上一级仍保持 `/`；从 `/storage` 或 `/sdcard` 进入共享存储后返回上一级会回到 `/`。
 
 ## 构建
 
 macOS 或 Linux：
 
 ```bash
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease :library:fatReleaseAar :library:fatReleaseJar
 ```
 
 Windows：
 
 ```powershell
-.\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:assembleRelease :library:fatReleaseAar :library:fatReleaseJar
 ```
 
-Debug APK 会生成带版本号的文件名：
+Release 文件会生成带版本号的文件名：
 
 ```text
-app/build/outputs/apk/debug/rockchip-ssh-sftp-v1.0.0002.apk
+app/build/outputs/apk/release/rockchip-ssh-sftp-v1.1.0004.apk
+
+Library 文件：
+
+```text
+library/build/outputs/aar/rockchip-ssh-sftp-library-v1.1.0004.aar
+library/build/outputs/jar/rockchip-ssh-sftp-library-v1.1.0004-all.jar
+```
+
+fat AAR 和 fat JAR 已包含 library 类以及 Apache MINA SSHD 运行时依赖。GitHub Release 还会提供 Bundle ZIP 和 `SHA256SUMS.txt`。
 ```
 
 命名格式为：
@@ -128,11 +138,11 @@ rockchip-ssh-sftp-v{versionName}.{versionCode 四位补零}.apk
 推送与 APK 版本一致的标签后，GitHub 会自动发布对应版本：
 
 ```bash
-git tag v1.0.0002
-git push origin v1.0.0002
+git tag v1.1.0004
+git push origin v1.1.0004
 ```
 
-GitHub Actions 会自动执行单元测试、构建可安装 APK、创建 Release，并上传 `rockchip-ssh-sftp-v1.0.0002.apk`。发布新版本前，请先修改 `app/build.gradle.kts` 中的 `versionName` 和 `versionCode`。
+GitHub Actions 会自动执行 library 和 app 单元测试，构建 release APK、fat AAR、fat JAR，生成校验文件并打包 Bundle ZIP。发布新版本前，请修改 `gradle.properties` 中的 `project.versionName` 和 `project.versionCode`。
 
 ## 文档
 

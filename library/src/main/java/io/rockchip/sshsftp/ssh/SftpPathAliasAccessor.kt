@@ -67,8 +67,17 @@ internal fun resolveSharedRemotePath(
             parts
     }
     val normalizedLogical = "/" + normalizedSegments.joinToString("/")
+    val shadowPrefix = shadowRoot?.normalize()?.toString()?.replace('\\', '/')
+    if (shadowPrefix != null && remote.startsWith(shadowPrefix)) {
+        return Paths.get(remote).normalize()
+    }
     if (rootAccess) {
         if (normalizedLogical == "/") return Paths.get("/").normalize()
+        if (normalizedLogical == "/storage") return sharedStorage.normalize()
+        rootBackedRemotePath(remote)?.let { restricted ->
+            return shadowRoot?.resolve("root/${restricted.removePrefix("/")}")?.normalize()
+                ?: Paths.get(restricted).normalize()
+        }
         if (remote == "/sdcard" || remote.startsWith("/sdcard/")) {
             return resolveStorageRelative(remote.removePrefix("/sdcard"), sharedStorage, rootAccess)
         }
@@ -81,10 +90,6 @@ internal fun resolveSharedRemotePath(
         return Paths.get(normalizedLogical).normalize()
     }
     if (normalizedLogical == "/") return sharedStorage.normalize()
-    val shadowPrefix = shadowRoot?.normalize()?.toString()?.replace('\\', '/')
-    if (shadowPrefix != null && remote.startsWith(shadowPrefix)) {
-        return Paths.get(remote).normalize()
-    }
     rootBackedRemotePath(remote)?.let { restricted ->
         return shadowRoot?.resolve("root/${restricted.removePrefix("/")}")?.normalize()
             ?: sharedStorage.resolve(restricted.removePrefix("/storage/emulated/0").removePrefix("/")).normalize()
@@ -240,9 +245,27 @@ internal fun isDeniedSftpPath(remotePath: String, rootAccess: Boolean = false): 
 internal fun resolveRootBackedSftpPath(path: Path, shadowRoot: Path): String? {
     val normalized = path.normalize()
     val root = shadowRoot.resolve("root").normalize()
-    if (!normalized.startsWith(root)) return null
-    val suffix = root.relativize(normalized).toString().replace('\\', '/')
-    return "/$suffix"
+    if (normalized.startsWith(root)) {
+        val suffix = root.relativize(normalized).toString().replace('\\', '/')
+        return "/$suffix"
+    }
+    return rootBackedRemotePath(normalized.toString().replace('\\', '/'))
+}
+
+internal fun logicalSftpPath(path: Path, shadowRoot: Path): Path {
+    val normalized = path.normalize()
+    val shadow = shadowRoot.normalize()
+    if (!normalized.startsWith(shadow)) return normalized
+    val relative = shadow.relativize(normalized).toString().replace('\\', '/')
+    return when {
+        relative == "root" -> Paths.get("/")
+        relative.startsWith("root/") -> Paths.get("/${relative.removePrefix("root/")}")
+        relative == "storage" -> Paths.get("/storage")
+        relative.startsWith("storage/") -> Paths.get("/${relative}")
+        relative == "virtual-root" -> Paths.get("/")
+        relative.startsWith("virtual-root/") -> Paths.get("/${relative.removePrefix("virtual-root/")}")
+        else -> normalized
+    }
 }
 
 internal class SftpPathAliasAccessor(
@@ -296,11 +319,11 @@ internal class SftpPathAliasAccessor(
         val rootPath = resolveRootBackedSftpPath(file, shadowRoot)
         if (rootPath != null) {
             Log.i(tag, "openDirectory root-backed file=$file root=$rootPath")
-            val children = buildList {
-                add(file)
-                file.parent?.let { add(it) }
-                addAll(rootList(rootPath).map { child -> file.resolve(child).normalize() })
-            }.distinct()
+            val children = rootList(rootPath).map { child ->
+                val entry = file.resolve(child).normalize()
+                materializeRootEntry(entry, "$rootPath/$child")
+                entry
+            }
             return StaticDirectoryStream(children)
         }
         Log.i(tag, "openDirectory default file=$file")
@@ -386,6 +409,17 @@ internal class SftpPathAliasAccessor(
         val result = rootShell("/system/bin/ls -A1 ${shellQuote(path)}")
         if (result.code != 0) throw IOException(result.stderr.ifBlank { "ls failed: $path" })
         return result.stdout.lineSequence().map { it.trimEnd('\r') }.filter { it.isNotBlank() }.toList()
+    }
+
+    private fun materializeRootEntry(entry: Path, rootPath: String) {
+        if (Files.exists(entry, LinkOption.NOFOLLOW_LINKS)) return
+        entry.parent?.let { Files.createDirectories(it) }
+        val attributes = rootStat(rootPath).attributes
+        if (attributes["isDirectory"] == true) {
+            Files.createDirectories(entry)
+        } else {
+            Files.createFile(entry)
+        }
     }
 
     private fun rootStat(path: String): RootStat {

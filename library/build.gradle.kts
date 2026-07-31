@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val artifactVersion = "${providers.gradleProperty("project.versionName").get()}.${providers.gradleProperty("project.versionCode").get().padStart(4, '0')}"
+
+group = "io.rockchip.sshsftp"
+version = artifactVersion
+
 android {
     namespace = "io.rockchip.sshsftp"
     compileSdk = 35
@@ -37,18 +42,47 @@ android {
 }
 
 dependencies {
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation(files("../app/libs/sshd-common-2.12.1.jar"))
-    implementation(files("../app/libs/sshd-core-2.12.1.jar"))
-    implementation(files("../app/libs/sshd-scp-2.12.1.jar"))
-    implementation(files("../app/libs/sshd-sftp-2.12.1.jar"))
-    implementation(files("../app/libs/slf4j-api-1.7.32.jar"))
+    api(fileTree("libs") { include("*.jar") })
     implementation("org.slf4j:slf4j-android:1.7.36") {
         exclude(group = "org.slf4j", module = "slf4j-api")
     }
+}
+
+val fatReleaseClasses by tasks.registering(Jar::class) {
+    dependsOn("bundleLibCompileToJarRelease")
+    archiveFileName.set("classes.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("intermediates/fat-aar/release"))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(layout.buildDirectory.file("intermediates/compile_library_classes_jar/release/bundleLibCompileToJarRelease/classes.jar").map { zipTree(it) })
+    from(configurations.getByName("releaseRuntimeClasspath").filter { it.extension == "jar" }.map { zipTree(it) })
+}
+
+val fatReleaseAarStaging = layout.buildDirectory.dir("intermediates/fat-aar/release/staging")
+
+val prepareFatReleaseAar by tasks.registering(Sync::class) {
+    dependsOn("bundleReleaseAar", fatReleaseClasses)
+    from({ zipTree(layout.buildDirectory.file("outputs/aar/${project.name}-release.aar")) }) {
+        exclude("classes.jar", "libs/**")
+    }
+    from(fatReleaseClasses) {
+        into(".")
+    }
+    into(fatReleaseAarStaging)
+}
+
+val fatReleaseAar by tasks.registering(Zip::class) {
+    dependsOn(prepareFatReleaseAar)
+    archiveFileName.set("rockchip-ssh-sftp-library-v$artifactVersion.aar")
+    destinationDirectory.set(layout.buildDirectory.dir("outputs/aar"))
+    from(fatReleaseAarStaging)
+}
+
+val fatReleaseJar by tasks.registering(Copy::class) {
+    dependsOn(fatReleaseClasses)
+    from(fatReleaseClasses)
+    into(layout.buildDirectory.dir("outputs/jar"))
+    rename { "rockchip-ssh-sftp-library-v$artifactVersion-all.jar" }
 }

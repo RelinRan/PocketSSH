@@ -15,6 +15,9 @@ import org.apache.sshd.server.command.Command
 import org.apache.sshd.server.Environment as SshEnvironment
 import java.io.Closeable
 import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.LinkOption
+import java.util.AbstractMap
 import java.util.concurrent.TimeUnit
 
 class SshServerManager(
@@ -61,12 +64,13 @@ class SshServerManager(
                     ProcessCommand(execCommandLine(command, rootAccess))
                 })
                 .build()
-            subsystemFactories = listOf(LoggingSftpSubsystemFactory(
+        subsystemFactories = listOf(LoggingSftpSubsystemFactory(
                 SftpPathAliasAccessor(
                     sharedStorage = sharedStoragePath(),
                     shadowRoot = keyDirectory.resolve("sftp-shadow"),
                     rootAccess = rootAccess,
-                )
+                ),
+                keyDirectory.resolve("sftp-shadow"),
             ))
         }
         try {
@@ -102,7 +106,7 @@ class SshServerManager(
         internal fun sharedStoragePath(): Path = Environment.getExternalStorageDirectory().toPath()
 
         private fun shellInitialDirectory(rootAccess: Boolean = false): Path =
-            if (rootAccess) Path.of("/") else sharedStoragePath()
+            if (rootAccess) Paths.get("/") else sharedStoragePath()
 
         internal fun execCommandLine(command: String, rootAccess: Boolean): List<String> =
             if (rootAccess) listOf("su", "0", "/system/bin/sh", "-c", command) else listOf("/system/bin/sh", "-c", command)
@@ -128,7 +132,10 @@ class SshServerManager(
     }
 }
 
-private class LoggingSftpSubsystemFactory(accessor: SftpFileSystemAccessor) : SftpSubsystemFactory() {
+private class LoggingSftpSubsystemFactory(
+    accessor: SftpFileSystemAccessor,
+    private val shadowRoot: Path,
+) : SftpSubsystemFactory() {
     init {
         fileSystemAccessor = accessor
     }
@@ -136,6 +143,27 @@ private class LoggingSftpSubsystemFactory(accessor: SftpFileSystemAccessor) : Sf
     override fun createSubsystem(channel: ChannelSession): Command = try {
         Log.i(TAG, "Creating SFTP subsystem")
         object : SftpSubsystem(channel, this) {
+            override fun doRealPathV345(
+                id: Int,
+                p: String,
+                path: Path,
+                vararg linkOptions: LinkOption,
+            ): AbstractMap.SimpleImmutableEntry<Path, Boolean> {
+                val result = super.doRealPathV345(id, p, path, *linkOptions)
+                return AbstractMap.SimpleImmutableEntry(logicalSftpPath(result.key, shadowRoot), result.value)
+            }
+
+            override fun doRealPathV6(
+                id: Int,
+                p: String,
+                extras: Collection<String>,
+                path: Path,
+                vararg linkOptions: LinkOption,
+            ): AbstractMap.SimpleImmutableEntry<Path, Boolean> {
+                val result = super.doRealPathV6(id, p, extras, path, *linkOptions)
+                return AbstractMap.SimpleImmutableEntry(logicalSftpPath(result.key, shadowRoot), result.value)
+            }
+
             override fun start(channel: ChannelSession, env: SshEnvironment) = try {
                 Log.i(TAG, "Starting SFTP subsystem")
                 super.start(channel, env)
